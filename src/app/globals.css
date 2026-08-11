@@ -1,0 +1,69 @@
+:root {
+  /* Color tokens — "readiness console": deep ink-green control room with a
+     calibrated brass signal accent. Chosen to avoid the generic cream/terracotta,
+     near-black/acid-green, and broadsheet defaults. */
+  --ih-bg: #0b1210;
+  --ih-bg-raised: #101a17;
+  --ih-surface: #142019;
+  --ih-surface-border: #223129;
+  --ih-text: #f4f1e8;
+  --ih-text-muted: #9fb0aa;
+  --ih-text-faint: #5f7069;
+  --ih-accent: #e8a33d;
+  --ih-accent-strong: #f4b859;
+  --ih-accent-ink: #241505;
+  --ih-live: #59c9a5;
+  --ih-danger: #e2574c;
+  --ih-focus-ring: #f4b859;
+
+  --ih-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --ih-font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --ih-font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --ih-radius-sm: 6px;
+  --ih-radius-md: 10px;
+  --ih-radius-lg: 18px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--ih-bg);
+  color: var(--ih-text);
+  font-family: var(--ih-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ih-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--ih-radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

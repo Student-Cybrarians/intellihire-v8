@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  google_sub    String   @unique
+  email         String?
+  email_verified Boolean
+  name          String?
+  avatar_url    String?
+  role          String   @default(USER)   // USER | ADMIN
+  status        String   @default(ACTIVE) // ACTIVE | SUSPENDED | DELETED
+  provider      String   @default(GOOGLE)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  last_login_at DateTime
+  last_activity_at DateTime
+  deleted_at    DateTime? @default(null)
+
+  sessions    Session[]
+  devices     Device[]
+  loginHistory LoginHistory[]
+}
+
+model Session {
+  id            String   @id @default(uuid())
+  user_id       String
+  token_hash    String   // hash of refresh token if refresh‑token flow is used
+  created_at    DateTime @default(now())
+  last_seen_at  DateTime @updatedAt
+  expires_at    DateTime
+  revoked_at    DateTime?
+  device_id     String?
+  ip_address    String?
+  user_agent    String?
+
+  user User @relation(fields: [user_id], references: [id], onDelete cascade)
+  device Device? @relation(fields: [device_id], references: [id])
+}
+
+model Device {
+  id            String   @id @default(uuid())
+  user_id       String
+  metadata_json String   // optional JSON with device info
+  first_seen_at DateTime @default(now())
+  last_seen_at  DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete cascade)
+}
+
+model LoginHistory {
+  id            String   @id @default(uuid())
+  user_id       String?  // nullable for system‑initiated events
+  provider      String   // e.g., "GOOGLE"
+  success       Boolean
+  failure_reason String?
+  timestamp     DateTime @default(now())
+  device_id     String?
+  security_metadata Json?
+
+  user User? @relation(fields: [user_id], references: [id])
+  device Device? @relation(fields: [device_id], references: [id])
+}
+
+model SecurityEvent {
+  id            String   @id @default(uuid())
+  user_id       String
+  event_type    String
+  severity      String
+  metadata      Json?
+  created_at    DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+}

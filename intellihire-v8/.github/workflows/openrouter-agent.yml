@@ -1,0 +1,83 @@
+name: 🤖 OpenRouter Code Agent
+
+on:
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      task:
+        description: 'Task description for the agent'
+        required: true
+        type: string
+        default: 'Add a health check endpoint to the FastAPI app'
+      model:
+        description: 'OpenRouter Model'
+        required: true
+        type: choice
+        options:
+          - anthropic/claude-3.5-sonnet
+          - openai/gpt-4o
+          - google/gemini-pro-1.5
+          - meta-llama/llama-3.1-405b-instruct
+        default: 'anthropic/claude-3.5-sonnet'
+  schedule:  # Optional: Run daily
+    - cron: '0 2 * * *'  # 2 AM UTC
+  push:
+    paths:
+      - 'scripts/agent.py'
+      - 'scripts/prompts/**'
+
+permissions:
+  contents: write  # REQUIRED for pushing commits
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Full history for commits
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'scripts/requirements.txt'
+
+      - name: 📦 Install Dependencies
+        working-directory: ./scripts
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 🤖 Run OpenRouter Agent
+        id: agent
+        working-directory: ./scripts
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python agent.py \
+            --task "${{ github.event.inputs.task || 'Default scheduled task: Improve code quality' }}" \
+            --model "${{ github.event.inputs.model || 'anthropic/claude-3.5-sonnet' }}"
+
+      - name: 📝 Commit & Push Changes
+        if: steps.agent.outputs.changes_made == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add -A
+          git commit -m "🤖 Automated update via OpenRouter Agent
+          
+          Task: ${{ github.event.inputs.task || 'Scheduled maintenance' }}
+          Model: ${{ github.event.inputs.model || 'default' }}
+          Trigger: ${{ github.event_name }}
+          Run: ${{ github.run_id }}"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

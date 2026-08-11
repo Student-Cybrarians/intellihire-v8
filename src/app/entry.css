@@ -1,0 +1,308 @@
+.ih-entry {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+}
+
+@media (max-width: 900px) {
+  .ih-entry {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Brand panel ---------- */
+
+.ih-entry__brand {
+  position: relative;
+  background:
+    radial-gradient(1200px 600px at -10% -10%, #17251f 0%, transparent 60%),
+    var(--ih-bg);
+  border-right: 1px solid var(--ih-surface-border);
+  padding: clamp(2rem, 5vw, 5rem) clamp(1.5rem, 6vw, 5rem);
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .ih-entry__brand {
+    border-right: none;
+    border-bottom: 1px solid var(--ih-surface-border);
+    padding: 2.5rem 1.5rem 2rem;
+  }
+}
+
+.ih-entry__brand-inner {
+  max-width: 34rem;
+}
+
+.ih-wordmark {
+  font-family: var(--ih-font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+  margin: 0 0 1.75rem;
+}
+
+.ih-wordmark__accent {
+  color: var(--ih-accent);
+}
+
+.ih-eyebrow {
+  font-family: var(--ih-font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ih-text-faint);
+  margin: 0 0 0.9rem;
+}
+
+.ih-headline {
+  font-family: var(--ih-font-display);
+  font-weight: 600;
+  font-size: clamp(2.1rem, 4.2vw, 3.4rem);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  margin: 0 0 1.25rem;
+}
+
+.ih-headline__accent {
+  color: var(--ih-accent);
+}
+
+.ih-lede {
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: var(--ih-text-muted);
+  max-width: 32rem;
+  margin: 0 0 2.5rem;
+}
+
+/* ---------- Module console (signature element) ---------- */
+
+.ih-console {
+  border: 1px solid var(--ih-surface-border);
+  border-radius: var(--ih-radius-md);
+  background: var(--ih-bg-raised);
+  padding: 1.1rem 1.25rem 0.5rem;
+}
+
+.ih-console__label {
+  font-family: var(--ih-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ih-text-faint);
+  margin: 0 0 0.75rem;
+}
+
+.ih-console__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ih-console__row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--ih-surface-border);
+}
+
+.ih-console__row:first-child {
+  border-top: none;
+}
+
+.ih-console__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ih-live);
+  box-shadow: 0 0 0 3px rgba(89, 201, 165, 0.15);
+  align-self: center;
+}
+
+.ih-console__code {
+  font-family: var(--ih-font-mono);
+  font-size: 0.72rem;
+  color: var(--ih-accent);
+  min-width: 2.4ch;
+}
+
+.ih-console__name {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.ih-console__detail {
+  font-size: 0.78rem;
+  color: var(--ih-text-faint);
+  text-align: right;
+}
+
+@media (max-width: 560px) {
+  .ih-console__row {
+    grid-template-columns: auto auto 1fr;
+  }
+  .ih-console__detail {
+    display: none;
+  }
+}
+
+/* ---------- Auth panel ---------- */
+
+.ih-entry__auth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 4rem);
+}
+
+.ih-card {
+  width: 100%;
+  max-width: 24rem;
+  background: var(--ih-surface);
+  border: 1px solid var(--ih-surface-border);
+  border-radius: var(--ih-radius-lg);
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+}
+
+.ih-card__eyebrow {
+  font-family: var(--ih-font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ih-text-faint);
+  margin: 0 0 0.6rem;
+}
+
+.ih-card__title {
+  font-family: var(--ih-font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.6rem;
+}
+
+.ih-card__subtitle {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--ih-text-muted);
+  margin: 0 0 1.75rem;
+}
+
+.ih-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: rgba(226, 87, 76, 0.1);
+  border: 1px solid rgba(226, 87, 76, 0.35);
+  color: #f3c9c5;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  border-radius: var(--ih-radius-sm);
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.ih-alert__dot {
+  width: 7px;
+  height: 7px;
+  margin-top: 0.4rem;
+  border-radius: 50%;
+  background: var(--ih-danger);
+  flex-shrink: 0;
+}
+
+.ih-google-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  background: var(--ih-accent);
+  color: var(--ih-accent-ink);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: var(--ih-radius-md);
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.ih-google-btn:hover:not(:disabled) {
+  background: var(--ih-accent-strong);
+}
+
+.ih-google-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ih-google-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.ih-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(36, 21, 5, 0.35);
+  border-top-color: var(--ih-accent-ink);
+  animation: ih-spin 0.7s linear infinite;
+}
+
+@keyframes ih-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ih-retry-link {
+  display: block;
+  margin: 0.75rem auto 0;
+  background: none;
+  border: none;
+  color: var(--ih-text-muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.ih-retry-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ih-card__legal {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ih-text-faint);
+  text-align: center;
+  margin: 1.5rem 0 0;
+}
+
+.ih-card__legal-link {
+  color: var(--ih-text-muted);
+  text-decoration: underline;
+}
+
+.ih-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--ih-surface-border);
+  color: var(--ih-text-faint);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.ih-security-note svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--ih-live);
+}
