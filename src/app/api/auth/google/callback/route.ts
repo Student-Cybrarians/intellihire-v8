@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
+import { pgPool } from "@/db/client";
 import {
   exchangeCodeForTokens,
   verifyGoogleIdToken,
@@ -30,6 +31,15 @@ import { sanitizeReturnTo } from "@/lib/safeRedirect";
 import { rateLimit } from "@/lib/rateLimit";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
+
+const REQUIRED_AUTH_TABLES = [
+  "users",
+  "devices",
+  "sessions",
+  "login_history",
+  "security_events",
+  "audit_logs",
+] as const;
 
 function clearOAuthCookies(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   for (const name of [
@@ -64,6 +74,25 @@ async function bestEffortLoginHistory(params: Parameters<typeof recordLoginHisto
   }
 }
 
+async function assertAuthSchema(): Promise<void> {
+  const result = await pgPool.query<{ table_name: string }>(
+    `SELECT table_name
+       FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])`,
+    [REQUIRED_AUTH_TABLES],
+  );
+
+  const present = new Set(result.rows.map((row) => row.table_name));
+  const missing = REQUIRED_AUTH_TABLES.filter((table) => !present.has(table));
+  if (missing.length > 0) {
+    throw new OAuthError(
+      `Authentication schema incomplete: missing ${missing.join(", ")}`,
+      "database_schema_missing",
+    );
+  }
+}
+
 export async function GET(request: Request) {
   const headerList = await headers();
   const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -87,8 +116,11 @@ export async function GET(request: Request) {
   const codeVerifier = cookieStore.get(OAUTH_VERIFIER_COOKIE)?.value;
   const returnTo = sanitizeReturnTo(cookieStore.get(OAUTH_RETURN_TO_COOKIE)?.value);
 
+  let stage = "callback_started";
+
   try {
     if (googleError) {
+      stage = "google_denied";
       await bestEffortLoginHistory({
         userId: null,
         success: false,
@@ -100,10 +132,12 @@ export async function GET(request: Request) {
     }
 
     if (!code || !returnedState || !expectedState || !expectedNonce || !codeVerifier) {
+      stage = "oauth_cookie_validation";
       return failureRedirect("invalid_request");
     }
 
     if (!safeEqual(returnedState, expectedState)) {
+      stage = "oauth_state_validation";
       await bestEffortSecurityEvent({
         userId: null,
         eventType: "oauth_state_mismatch",
@@ -113,12 +147,20 @@ export async function GET(request: Request) {
       return failureRedirect("state_mismatch");
     }
 
+    stage = "database_schema_check";
+    await assertAuthSchema();
+
+    stage = "google_token_exchange";
     const { idToken } = await exchangeCodeForTokens(code, codeVerifier);
+
+    stage = "google_id_token_verification";
     const claims = await verifyGoogleIdToken(idToken, expectedNonce);
 
+    stage = "user_create_or_lookup";
     const { user, isNewUser } = await createOrGetUserFromGoogle(claims);
 
     if (user.status !== "ACTIVE") {
+      stage = "account_status_check";
       await bestEffortLoginHistory({
         userId: user.id,
         success: false,
@@ -136,10 +178,14 @@ export async function GET(request: Request) {
     }
 
     if (!isNewUser) {
+      stage = "profile_sync";
       await syncProfileFromGoogle(user.id, claims);
     }
 
+    stage = "session_device_create";
     const deviceId = await upsertDevice({ userId: user.id, userAgent });
+
+    stage = "session_create";
     const { rawToken } = await createSession({
       userId: user.id,
       deviceId,
@@ -176,17 +222,25 @@ export async function GET(request: Request) {
     clearOAuthCookies(cookieStore);
 
     if (err instanceof OAuthError) {
-      logger.warn({ code: err.code }, "auth_google_callback_failed");
+      logger.warn({ code: err.code, stage }, "auth_google_callback_failed");
       await bestEffortSecurityEvent({
         userId: null,
         eventType: `oauth_failure:${err.code}`,
         severity: "MEDIUM",
-        metadata: { ip },
+        metadata: { ip, stage },
       });
       return failureRedirect(err.code);
     }
 
-    logger.error({ err: (err as Error).message }, "auth_google_callback_unexpected_error");
+    logger.error({ err: (err as Error).message, stage }, "auth_google_callback_unexpected_error");
+
+    if (stage === "user_create_or_lookup" || stage === "profile_sync" || stage === "database_schema_check") {
+      return failureRedirect("database_error");
+    }
+    if (stage === "session_device_create" || stage === "session_create") {
+      return failureRedirect("session_error");
+    }
+
     return failureRedirect("server_error");
   }
 }
