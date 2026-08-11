@@ -48,6 +48,22 @@ function failureRedirect(reason: string) {
   return NextResponse.redirect(url);
 }
 
+async function bestEffortSecurityEvent(params: Parameters<typeof recordSecurityEvent>[0]): Promise<void> {
+  try {
+    await recordSecurityEvent(params);
+  } catch (err) {
+    logger.error({ err: (err as Error).message, eventType: params.eventType }, "auth_security_event_write_failed");
+  }
+}
+
+async function bestEffortLoginHistory(params: Parameters<typeof recordLoginHistory>[0]): Promise<void> {
+  try {
+    await recordLoginHistory(params);
+  } catch (err) {
+    logger.error({ err: (err as Error).message, failureReason: params.failureReason }, "auth_login_history_write_failed");
+  }
+}
+
 export async function GET(request: Request) {
   const headerList = await headers();
   const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -73,7 +89,7 @@ export async function GET(request: Request) {
 
   try {
     if (googleError) {
-      await recordLoginHistory({
+      await bestEffortLoginHistory({
         userId: null,
         success: false,
         failureReason: `google_error:${googleError}`,
@@ -88,7 +104,7 @@ export async function GET(request: Request) {
     }
 
     if (!safeEqual(returnedState, expectedState)) {
-      await recordSecurityEvent({
+      await bestEffortSecurityEvent({
         userId: null,
         eventType: "oauth_state_mismatch",
         severity: "HIGH",
@@ -103,14 +119,14 @@ export async function GET(request: Request) {
     const { user, isNewUser } = await createOrGetUserFromGoogle(claims);
 
     if (user.status !== "ACTIVE") {
-      await recordLoginHistory({
+      await bestEffortLoginHistory({
         userId: user.id,
         success: false,
         failureReason: `account_${user.status.toLowerCase()}`,
         ipAddress: ip,
         userAgent,
       });
-      await recordSecurityEvent({
+      await bestEffortSecurityEvent({
         userId: user.id,
         eventType: "login_blocked_account_status",
         severity: "MEDIUM",
@@ -131,8 +147,13 @@ export async function GET(request: Request) {
       userAgent,
     });
 
-    await markLogin(user.id);
-    await recordLoginHistory({
+    try {
+      await markLogin(user.id);
+    } catch (err) {
+      logger.error({ err: (err as Error).message, userId: user.id }, "auth_mark_login_failed");
+    }
+
+    await bestEffortLoginHistory({
       userId: user.id,
       success: true,
       ipAddress: ip,
@@ -156,7 +177,7 @@ export async function GET(request: Request) {
 
     if (err instanceof OAuthError) {
       logger.warn({ code: err.code }, "auth_google_callback_failed");
-      await recordSecurityEvent({
+      await bestEffortSecurityEvent({
         userId: null,
         eventType: `oauth_failure:${err.code}`,
         severity: "MEDIUM",
