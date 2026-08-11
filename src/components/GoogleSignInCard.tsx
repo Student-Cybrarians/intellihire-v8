@@ -10,6 +10,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   nonce_mismatch: "Your sign-in session expired. Please try again.",
   email_not_verified: "This Google account's email isn't verified. Verify it with Google, then try again.",
   account_suspended: "This account has been suspended. Contact support if you believe this is a mistake.",
+  database_schema_missing: "IntelliHire's account database is still being prepared. Please try again shortly.",
+  database_error: "IntelliHire could not finish creating your account. Please try Google sign-in again.",
+  session_error: "IntelliHire verified your Google account but could not create your session. Please try again.",
   server_error: "Something went wrong on our end. Please try again in a moment.",
 };
 
@@ -102,10 +105,10 @@ export function GoogleSignInCard({
 function GoogleGlyph() {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-    <path fill="#4285F4" d="M19.6 10.23c0-.68-.06-1.34-.17-1.98H10v3.75h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.9-1.75 2.99-4.32 2.99-7.29Z" />
-    <path fill="#34A853" d="M10 20c2.7 0 4.96-.89 6.62-2.42l-3.23-2.5c-.9.6-2.05.96-3.39.96-2.6 0-4.8-1.76-5.59-4.12H1.06v2.59A10 10 0 0 0 10 20Z" />
-    <path fill="#FBBC05" d="M4.41 11.92a5.99 5.99 0 0 1 0-3.84V5.49H1.06a10 10 0 0 0 0 9.02l3.35-2.59Z" />
-    <path fill="#EA4335" d="M10 3.96c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.6 9.6 0 0 0 10 0 10 10 0 0 0 1.06 5.49l3.35 2.6c.79-2.37 2.99-4.13 5.59-4.13Z" />
+      <path fill="#4285F4" d="M19.6 10.23c0-.68-.06-1.34-.17-1.98H10v3.75h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.9-1.75 2.99-4.32 2.99-7.29Z" />
+      <path fill="#34A853" d="M10 20c2.7 0 4.96-.89 6.62-2.42l-3.23-2.5c-.9.6-2.05.96-3.39.96-2.6 0-4.8-1.76-5.59-4.12H1.06v2.59A10 10 0 0 0 10 20Z" />
+      <path fill="#FBBC05" d="M4.41 11.92a5.99 5.99 0 0 1 0-3.84V5.49H1.06a10 10 0 0 0 0 9.02l3.35-2.59Z" />
+      <path fill="#EA4335" d="M10 3.96c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.6 9.6 0 0 0 10 0 10 10 0 0 0 1.06 5.49l3.35 2.6c.79-2.37 2.99-4.13 5.59-4.13Z" />
     </svg>
   );
 }
