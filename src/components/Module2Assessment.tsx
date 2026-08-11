@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 const sections = ["quantitative", "logical", "verbal", "domain", "coding"] as const;
 
@@ -43,7 +43,10 @@ export function Module2Assessment() {
   const progress = Math.min(100, Math.round((answered / 8) * 100));
   const currentSection = attempt?.currentQuestion?.section as string | undefined;
 
-  const sectionLabel = useMemo(() => currentSection ? currentSection.replace(/^./, (x) => x.toUpperCase()) : "Adaptive", [currentSection]);
+  const sectionLabel = useMemo(
+    () => (currentSection ? currentSection.replace(/^./, (x) => x.toUpperCase()) : "Adaptive"),
+    [currentSection],
+  );
 
   const submitAnswer = async () => {
     if (!attempt?.currentQuestion || selected === null || busy) return;
@@ -159,6 +162,6 @@ export function Module2Assessment() {
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, children }: { title: string; children: ReactNode }) {
   return <div style={{ background: "var(--ih-surface)", border: "1px solid var(--ih-surface-border)", borderRadius: 16, padding: 18 }}><h3 style={{ marginTop: 0 }}>{title}</h3><div style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>{children}</div></div>;
 }
