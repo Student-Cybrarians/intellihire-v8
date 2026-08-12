@@ -6,7 +6,7 @@ import {
   verifyGoogleIdToken,
   OAuthError,
 } from "@/lib/oauth/google";
-import { safeEqual } from "@/lib/crypto";
+import { openOAuthTransaction } from "@/lib/crypto";
 import {
   createOrGetUserFromGoogle,
   syncProfileFromGoogle,
@@ -111,11 +111,6 @@ export async function GET(request: Request) {
   const returnedState = searchParams.get("state");
   const code = searchParams.get("code");
 
-  const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
-  const expectedNonce = cookieStore.get(OAUTH_NONCE_COOKIE)?.value;
-  const codeVerifier = cookieStore.get(OAUTH_VERIFIER_COOKIE)?.value;
-  const returnTo = sanitizeReturnTo(cookieStore.get(OAUTH_RETURN_TO_COOKIE)?.value);
-
   let stage = "callback_started";
 
   try {
@@ -131,21 +126,25 @@ export async function GET(request: Request) {
       return failureRedirect("access_denied");
     }
 
-    if (!code || !returnedState || !expectedState || !expectedNonce || !codeVerifier) {
-      stage = "oauth_cookie_validation";
+    if (!code || !returnedState) {
+      stage = "oauth_request_validation";
       return failureRedirect("invalid_request");
     }
 
-    if (!safeEqual(returnedState, expectedState)) {
-      stage = "oauth_state_validation";
-      await bestEffortSecurityEvent({
-        userId: null,
-        eventType: "oauth_state_mismatch",
-        severity: "HIGH",
-        metadata: { ip },
-      });
-      return failureRedirect("state_mismatch");
+    // The encrypted state is now the authoritative OAuth transaction. This
+    // removes the fragile dependency on four browser cookies surviving the
+    // Google cross-site redirect while keeping the PKCE verifier confidential.
+    stage = "oauth_state_validation";
+    let transaction;
+    try {
+      transaction = openOAuthTransaction(returnedState);
+    } catch {
+      return failureRedirect("invalid_request");
     }
+
+    const codeVerifier = transaction.verifier;
+    const expectedNonce = transaction.nonce;
+    const returnTo = sanitizeReturnTo(transaction.returnTo);
 
     stage = "database_schema_check";
     await assertAuthSchema();
