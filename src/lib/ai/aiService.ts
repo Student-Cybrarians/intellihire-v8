@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { NvidiaAIProvider } from "./NvidiaAIProvider";
 import { OpenRouterAIProvider } from "./OpenRouterAIProvider";
 import { AIServiceError } from "./types";
 import type { AIProvider, GenerateRequest, AnalyzeTextRequest, AnalyzeVisionRequest, AIResponse } from "./types";
@@ -7,16 +8,15 @@ import { logger, redactSecrets } from "@/lib/logger";
 
 const DEFAULT_BUDGET = { limit: 20, windowSeconds: 60 };
 
-const provider: AIProvider = new OpenRouterAIProvider();
+function getProvider(): AIProvider {
+  if (process.env.NVIDIA_API_KEY?.trim()) return new NvidiaAIProvider();
+  return new OpenRouterAIProvider();
+}
 
 async function enforceBudget(identifier: string, capability: string): Promise<void> {
   const result = await rateLimit(`ai:${capability}`, identifier, DEFAULT_BUDGET.limit, DEFAULT_BUDGET.windowSeconds);
   if (!result.allowed) {
-    throw new AIServiceError(
-      `AI usage budget exceeded for capability "${capability}"`,
-      "BUDGET_EXCEEDED",
-      false,
-    );
+    throw new AIServiceError(`AI usage budget exceeded for capability "${capability}"`, "BUDGET_EXCEEDED", false);
   }
 }
 
@@ -25,7 +25,7 @@ export const aiService = {
     await enforceBudget(requesterId, request.capability);
     const correlationId = request.correlationId ?? randomUUID();
     try {
-      return await provider.generate({ ...request, correlationId });
+      return await getProvider().generate({ ...request, correlationId });
     } catch (err) {
       logger.error(redactSecrets({ correlationId, requesterId, err: (err as Error).message }), "ai_generate_failed");
       throw err;
@@ -36,7 +36,7 @@ export const aiService = {
     await enforceBudget(requesterId, request.capability);
     const correlationId = request.correlationId ?? randomUUID();
     try {
-      return await provider.analyzeText({ ...request, correlationId });
+      return await getProvider().analyzeText({ ...request, correlationId });
     } catch (err) {
       logger.error(redactSecrets({ correlationId, requesterId, err: (err as Error).message }), "ai_analyze_text_failed");
       throw err;
@@ -47,7 +47,7 @@ export const aiService = {
     await enforceBudget(requesterId, "vision");
     const correlationId = request.correlationId ?? randomUUID();
     try {
-      return await provider.analyzeVision({ ...request, correlationId });
+      return await getProvider().analyzeVision({ ...request, correlationId });
     } catch (err) {
       logger.error(redactSecrets({ correlationId, requesterId, err: (err as Error).message }), "ai_analyze_vision_failed");
       throw err;
@@ -55,6 +55,6 @@ export const aiService = {
   },
 
   async healthCheck() {
-    return provider.healthCheck();
+    return getProvider().healthCheck();
   },
 };
