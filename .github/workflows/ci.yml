@@ -9,6 +9,20 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ci -d ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@v4
 
@@ -42,8 +56,6 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # Build-time placeholders only — never real secrets. Real values are
-          # injected by Vercel / deployment environment at runtime.
           APP_URL: https://ci-placeholder.invalid
           API_URL: https://ci-placeholder.invalid
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
