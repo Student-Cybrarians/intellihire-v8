@@ -30,6 +30,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pdf-parse", "word-extractor"],
   async headers() {
     return [
       {
