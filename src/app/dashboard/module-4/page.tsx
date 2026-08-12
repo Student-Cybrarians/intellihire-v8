@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Interview = {
   id: string; role: string | null; company: string | null; status: string; answered: number; total: number;
@@ -29,9 +29,10 @@ export default function Module4Page() {
   const [interview, setInterview] = useState<Interview | null>(null); const [answer, setAnswer] = useState("");
   const [lastEvaluation, setLastEvaluation] = useState<Evaluation | null>(null); const [result, setResult] = useState<Result | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]); const [busy, setBusy] = useState(false); const [listening, setListening] = useState(false); const [error, setError] = useState("");
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   async function loadHistory() { try { const data = await api<{ interviews: HistoryItem[] }>("/api/hr/history"); setHistory(data.interviews); } catch { /* secondary data */ } }
-  // The effect subscribes to an external API; the state update occurs after the async request resolves.
+  // The effect synchronizes with the external history API; state is updated only after the async request resolves.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadHistory(); }, []);
 
@@ -51,13 +52,14 @@ export default function Module4Page() {
     catch (e) { setError(e instanceof Error ? e.message : "Unable to finish interview"); } finally { setBusy(false); }
   }
   function toggleSpeech() {
+    if (listening) { recognitionRef.current?.stop(); recognitionRef.current = null; setListening(false); return; }
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Recognition) { setError("Speech-to-text is not supported by this browser. You can type your answer instead."); return; }
-    if (listening) { setListening(false); return; }
-    const recognition = new Recognition(); recognition.lang = "en-US"; recognition.interimResults = true; recognition.continuous = true;
+    const recognition = new Recognition(); recognitionRef.current = recognition; recognition.lang = "en-US"; recognition.interimResults = true; recognition.continuous = true;
     recognition.onresult = (event) => { let text = ""; for (let i = 0; i < event.results.length; i += 1) text += event.results[i][0]?.transcript ?? ""; setAnswer(text.trim()); };
-    recognition.onerror = () => { setListening(false); setError("Microphone transcription failed. Check browser microphone permission or type your answer."); };
-    recognition.onend = () => setListening(false); recognition.start(); setListening(true);
+    recognition.onerror = () => { setListening(false); recognitionRef.current = null; setError("Microphone transcription failed. Check browser microphone permission or type your answer."); };
+    recognition.onend = () => { setListening(false); recognitionRef.current = null; };
+    recognition.start(); setListening(true);
   }
 
   return (
