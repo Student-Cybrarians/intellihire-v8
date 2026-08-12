@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import type { AtsScreeningResult } from "@/lib/modules/ats/types";
 import "./Module1AtsConsole.css";
 
 const steps = ["Resume", "Job Description", "Target Role", "Parse", "Match", "Score", "Gaps", "Recommendations"];
 const CLIENT_TIMEOUT_MS = 12_000;
+const UPLOAD_TIMEOUT_MS = 20_000;
 
 type ScreeningResponse = {
   result?: AtsScreeningResult;
@@ -13,6 +15,14 @@ type ScreeningResponse = {
   error?: string;
   mode?: "ai" | "fallback";
   warning?: string;
+};
+
+type ResumeUploadResponse = {
+  text?: string;
+  documentType?: string;
+  truncated?: boolean;
+  message?: string;
+  error?: string;
 };
 
 export function Module1AtsConsole() {
@@ -25,9 +35,71 @@ export function Module1AtsConsole() {
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resumeWords = useMemo(() => wordCount(resumeText), [resumeText]);
   const jdWords = useMemo(() => wordCount(jobDescription), [jobDescription]);
+
+  async function handleResumeFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+    setWarning(null);
+    setResult(null);
+    setMode(null);
+    setUploadedFileName(file.name);
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+    try {
+      const form = new FormData();
+      form.append("file", file, file.name);
+
+      const response = await fetch("/api/modules/ats/parse-resume", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        body: form,
+        signal: controller.signal,
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json")
+        ? ((await response.json().catch(() => ({}))) as ResumeUploadResponse)
+        : {};
+
+      if (!response.ok || !payload.text) {
+        if (response.status === 401) {
+          throw new Error("Your session has expired. Please sign in again and reopen Module 1.");
+        }
+        throw new Error(payload.message || payload.error || `Resume upload failed (${response.status}).`);
+      }
+
+      setResumeText(payload.text);
+      const typeLabel = payload.documentType ? payload.documentType.toUpperCase() : "DOCUMENT";
+      setWarning(
+        payload.truncated
+          ? `${typeLabel} uploaded successfully. The extracted text was capped at 30,000 characters for safe ATS processing.`
+          : `${typeLabel} uploaded successfully. Extracted resume text is ready for screening.`,
+      );
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Resume extraction timed out. Try a smaller text-based document or paste the resume text manually.");
+      } else {
+        setError(err instanceof Error ? err.message : "Resume upload failed.");
+        setUploadedFileName(null);
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      setUploading(false);
+    }
+  }
 
   async function screenResume() {
     const resume = resumeText.trim();
@@ -125,17 +197,33 @@ export function Module1AtsConsole() {
       </section>
 
       <div className="m1-form">
-        <section className="m1-panel m1-panel--resume"><div className="m1-panel-heading"><div><span className="m1-panel-index">01</span><div><h2>Candidate Resume</h2><p>Paste the extracted resume text for analysis.</p></div></div><span className="m1-count">{resumeWords} words</span></div><textarea value={resumeText} onChange={(event) => setResumeText(event.target.value)} placeholder="Name, summary, education, experience, projects, skills, certifications..." rows={18} aria-label="Candidate resume" /></section>
+        <section className="m1-panel m1-panel--resume"><div className="m1-panel-heading"><div><span className="m1-panel-index">01</span><div><h2>Candidate Resume</h2><p>Paste text or upload a resume document.</p></div></div><span className="m1-count">{resumeWords} words</span></div>
+          <div className="m1-upload-row">
+            <label className="m1-upload-button">
+              <span>{uploading ? "Extracting…" : "Upload Resume"}</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.txt,.rtf,.html,.htm,.md,.markdown,.csv,.json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/rtf,text/html"
+                onChange={handleResumeFile}
+                disabled={uploading || busy}
+              />
+            </label>
+            <span className="m1-upload-help">PDF · DOC · DOCX · TXT · RTF · HTML · MD · CSV · JSON · max 8 MB</span>
+            {uploadedFileName ? <span className="m1-file-name" title={uploadedFileName}>✓ {uploadedFileName}</span> : null}
+          </div>
+          <textarea value={resumeText} onChange={(event) => { setResumeText(event.target.value); setUploadedFileName(null); setWarning(null); }} placeholder="Name, summary, education, experience, projects, skills, certifications..." rows={18} aria-label="Candidate resume" />
+        </section>
         <section className="m1-panel"><div className="m1-panel-heading"><div><span className="m1-panel-index">02</span><div><h2>Target Job Description</h2><p>Use the actual posting you want to prepare for.</p></div></div><span className="m1-count">{jdWords} words</span></div><textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder="Responsibilities, required skills, qualifications, experience, technologies..." rows={18} aria-label="Target job description" /></section>
         <section className="m1-panel m1-target-panel"><div className="m1-panel-heading"><div><span className="m1-panel-index">03</span><div><h2>Target Context</h2><p>Optional context used to personalize the screening.</p></div></div></div><div className="m1-target-grid"><label><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} placeholder="e.g. Acme Technologies" /></label><label><span>Target role</span><input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} placeholder="e.g. Software Engineer" /></label></div></section>
-        <div className="m1-submit-row"><div><strong>{busy ? "Analyzing resume…" : result ? "Screening complete" : "Ready to screen?"}</strong><span>{busy ? "Calling the ATS analysis service and preparing your report." : result ? "Your report is ready below. You can export it as JSON." : "Scores are generated from the submitted resume and job description."}</span></div><button type="button" disabled={busy} onClick={screenResume}>{busy ? "Analyzing…" : result ? "Run Again →" : "Run AI ATS Screening →"}</button></div>
+        <div className="m1-submit-row"><div><strong>{busy ? "Analyzing resume…" : result ? "Screening complete" : "Ready to screen?"}</strong><span>{busy ? "Calling the ATS analysis service and preparing your report." : result ? "Your report is ready below. You can export it as JSON." : "Scores are generated from the submitted resume and job description."}</span></div><button type="button" disabled={busy || uploading} onClick={screenResume}>{busy ? "Analyzing…" : result ? "Run Again →" : "Run AI ATS Screening →"}</button></div>
       </div>
 
       {error ? <div className="m1-error" role="alert"><strong>Screening could not complete.</strong><br />{error}<br /><button type="button" className="m1-retry" onClick={screenResume}>Try again</button></div> : null}
+      {warning ? <div className="m1-warning" role="status">{warning}</div> : null}
 
       {result ? <section className="m1-results" aria-live="polite">
         <div className="m1-results-header"><div><p className="m1-kicker">SCREENING COMPLETE</p><h2>Candidate Match Report</h2><p>{company || "Target company not specified"} · {targetRole || "Target role not specified"}</p></div><div className="m1-results-actions">{mode === "fallback" ? <span className="m1-mode-warning">ATS text analysis · AI enrichment unavailable</span> : <span className="m1-mode-success">AI analysis completed</span>}<button type="button" className="m1-secondary-button" onClick={downloadReport}>Export JSON report</button></div></div>
-        {warning ? <div className="m1-warning" role="status">{warning}</div> : null}
         <div className="m1-score"><div className="m1-score__number">{result.overallScore}</div><div><div className="m1-score__label">Overall match / 100</div><p>{result.summary}</p></div></div>
         <div className="m1-metrics">{[["ATS compatibility", result.atsCompatibility], ["Keyword match", result.keywordMatch], ["Experience fit", result.experienceFit], ["Education fit", result.educationFit]].map(([label, value]) => <div className="m1-metric" key={String(label)}><span>{label}</span><strong>{value}%</strong><div className="m1-meter"><i style={{ width: `${Number(value)}%` }} /></div></div>)}</div>
         <div className="m1-grid"><List title="Matched skills" tone="positive" items={result.matchedSkills} /><List title="Missing skills" tone="warning" items={result.missingSkills} /><List title="Candidate strengths" items={result.strengths} /><List title="Recruiter recommendations" items={result.recommendations} /></div>
