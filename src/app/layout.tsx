@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { HomeLogoButton } from "@/components/brand/HomeLogoButton";
 
 export const metadata: Metadata = {
   title: "IntelliHire — AI-Based Placement Trainer",
@@ -18,7 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <HomeLogoButton />
+        {children}
+      </body>
     </html>
   );
 }
