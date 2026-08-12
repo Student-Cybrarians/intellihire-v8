@@ -14,8 +14,11 @@ const DEFAULT_MODEL = "openai/gpt-4o-mini";
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_RETRIES = 3;
 
+type ContentPart = { type?: string; text?: string };
+type MessageContent = string | ContentPart[];
+
 type ChatCompletionResponse = {
-  choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
+  choices?: Array<{ message?: { content?: MessageContent } }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   model?: string;
   error?: { message?: string };
@@ -37,12 +40,12 @@ function getApiKey(): string | undefined {
   return process.env.OPENROUTER_API_KEY;
 }
 
-function extractText(content: ChatCompletionResponse["choices"] extends Array<infer T> ? T extends { message?: infer M } ? M extends { content?: infer C } ? C : never : never : never): string | null {
+function extractText(content: MessageContent | undefined): string | null {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     const text = content
-      .filter((part) => part?.type === "text" && typeof part.text === "string")
-      .map((part) => part.text as string)
+      .filter((part: ContentPart) => part?.type === "text" && typeof part.text === "string")
+      .map((part: ContentPart) => part.text as string)
       .join("\n")
       .trim();
     return text || null;
@@ -53,7 +56,7 @@ function extractText(content: ChatCompletionResponse["choices"] extends Array<in
 export class OpenRouterAIProvider implements AIProvider {
   private async chatCompletion(params: {
     capability: GenerateRequest["capability"];
-    messages: Array<{ role: string; content: unknown }>;
+    messages: Array<{ role: string; content: MessageContent }>;
     maxTokens?: number;
     temperature?: number;
     correlationId: string;
@@ -169,7 +172,7 @@ export class OpenRouterAIProvider implements AIProvider {
 
   async generate(request: GenerateRequest): Promise<AIResponse> {
     const correlationId = request.correlationId ?? randomUUID();
-    const messages = [
+    const messages: Array<{ role: string; content: MessageContent }> = [
       ...(request.systemPrompt ? [{ role: "system", content: request.systemPrompt }] : []),
       { role: "user", content: request.prompt },
     ];
@@ -188,7 +191,7 @@ export class OpenRouterAIProvider implements AIProvider {
 
   async analyzeVision(request: AnalyzeVisionRequest): Promise<AIResponse> {
     const correlationId = request.correlationId ?? randomUUID();
-    const messages = [
+    const messages: Array<{ role: string; content: MessageContent }> = [
       {
         role: "user",
         content: [
@@ -196,7 +199,7 @@ export class OpenRouterAIProvider implements AIProvider {
           {
             type: "image_url",
             image_url: { url: `data:${request.imageMediaType};base64,${request.imageBase64}` },
-          },
+          } as ContentPart & { image_url: { url: string } },
         ],
       },
     ];
