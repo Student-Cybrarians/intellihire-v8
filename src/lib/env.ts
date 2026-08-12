@@ -48,6 +48,17 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+function isPlaceholder(value: string | undefined): boolean {
+  if (!value) return true;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "your_32_plus_character_secret" ||
+    normalized === "your-session-secret" ||
+    normalized === "change-me" ||
+    normalized === "change_this_to_a_random_32_plus_character_secret"
+  );
+}
+
 function runtimeEnvironment(): NodeJS.ProcessEnv {
   if (process.env.NODE_ENV !== "development") {
     return process.env;
@@ -61,8 +72,9 @@ function runtimeEnvironment(): NodeJS.ProcessEnv {
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "development-placeholder",
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "development-placeholder",
     ADMIN_EMAIL: process.env.ADMIN_EMAIL || "admin@example.com",
-    SESSION_SECRET:
-      process.env.SESSION_SECRET || randomBytes(48).toString("base64url"),
+    SESSION_SECRET: isPlaceholder(process.env.SESSION_SECRET)
+      ? randomBytes(48).toString("base64url")
+      : process.env.SESSION_SECRET,
   };
 }
 
