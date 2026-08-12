@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { AtsScreeningResult } from "@/lib/modules/ats/types";
 import "./Module1AtsConsole.css";
 
 const steps = ["Resume", "Job Description", "Target Role", "Parse", "Match", "Score", "Gaps", "Recommendations"];
-const CLIENT_TIMEOUT_MS = 14_000;
+const CLIENT_TIMEOUT_MS = 12_000;
 
 type ScreeningResponse = {
   result?: AtsScreeningResult;
@@ -16,6 +17,7 @@ type ScreeningResponse = {
 };
 
 export function Module1AtsConsole() {
+  const router = useRouter();
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [company, setCompany] = useState("");
@@ -29,13 +31,24 @@ export function Module1AtsConsole() {
   const resumeWords = useMemo(() => wordCount(resumeText), [resumeText]);
   const jdWords = useMemo(() => wordCount(jobDescription), [jobDescription]);
 
+  function setScreeningUrl(state: "running" | "complete" | "error") {
+    const params = new URLSearchParams(window.location.search);
+    params.set("screening", state);
+    router.replace(`/dashboard/module-1?${params.toString()}`, { scroll: false });
+  }
+
   async function screenResume() {
-    if (resumeText.trim().length < 100) {
+    const resume = resumeText.trim();
+    const jd = jobDescription.trim();
+
+    if (resume.length < 100) {
       setError("Please provide at least 100 characters of resume text before screening.");
+      setScreeningUrl("error");
       return;
     }
-    if (jobDescription.trim().length < 50) {
+    if (jd.length < 50) {
       setError("Please provide at least 50 characters of job-description text before screening.");
+      setScreeningUrl("error");
       return;
     }
 
@@ -44,6 +57,7 @@ export function Module1AtsConsole() {
     setWarning(null);
     setResult(null);
     setMode(null);
+    setScreeningUrl("running");
 
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
@@ -51,14 +65,18 @@ export function Module1AtsConsole() {
     try {
       const response = await fetch("/api/modules/ats/screen", {
         method: "POST",
-        credentials: "include",
+        credentials: "same-origin",
         cache: "no-store",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ resumeText, jobDescription, company, targetRole }),
+        body: JSON.stringify({ resumeText: resume, jobDescription: jd, company: company.trim(), targetRole: targetRole.trim() }),
         signal: controller.signal,
       });
 
-      const payload = (await response.json().catch(() => ({}))) as ScreeningResponse;
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json")
+        ? ((await response.json().catch(() => ({}))) as ScreeningResponse)
+        : {};
+
       if (!response.ok || !payload.result) {
         if (response.status === 401) {
           throw new Error("Your session has expired. Please sign in again and reopen Module 1.");
@@ -69,12 +87,14 @@ export function Module1AtsConsole() {
       setResult(payload.result);
       setMode(payload.mode ?? "ai");
       setWarning(payload.warning ?? null);
+      setScreeningUrl("complete");
       window.setTimeout(() => {
         document.querySelector(".m1-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
+      }, 50);
     } catch (err) {
+      setScreeningUrl("error");
       if (err instanceof DOMException && err.name === "AbortError") {
-        setError("The screening request took too long. Please try again; the server has a deterministic ATS fallback for AI outages.");
+        setError("The screening request timed out. Please try again. Module 1 has a deterministic ATS fallback for AI outages.");
       } else {
         setError(err instanceof Error ? err.message : "ATS screening failed.");
       }
@@ -121,7 +141,7 @@ export function Module1AtsConsole() {
         <section className="m1-panel m1-panel--resume"><div className="m1-panel-heading"><div><span className="m1-panel-index">01</span><div><h2>Candidate Resume</h2><p>Paste the extracted resume text for analysis.</p></div></div><span className="m1-count">{resumeWords} words</span></div><textarea value={resumeText} onChange={(event) => setResumeText(event.target.value)} placeholder="Name, summary, education, experience, projects, skills, certifications..." rows={18} aria-label="Candidate resume" /></section>
         <section className="m1-panel"><div className="m1-panel-heading"><div><span className="m1-panel-index">02</span><div><h2>Target Job Description</h2><p>Use the actual posting you want to prepare for.</p></div></div><span className="m1-count">{jdWords} words</span></div><textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder="Responsibilities, required skills, qualifications, experience, technologies..." rows={18} aria-label="Target job description" /></section>
         <section className="m1-panel m1-target-panel"><div className="m1-panel-heading"><div><span className="m1-panel-index">03</span><div><h2>Target Context</h2><p>Optional context used to personalize the screening.</p></div></div></div><div className="m1-target-grid"><label><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} placeholder="e.g. Acme Technologies" /></label><label><span>Target role</span><input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} placeholder="e.g. Software Engineer" /></label></div></section>
-        <div className="m1-submit-row"><div><strong>{busy ? "Analyzing resume…" : "Ready to screen?"}</strong><span>{busy ? "Calling the ATS analysis service and preparing your report." : "Scores are generated from the submitted resume and job description."}</span></div><button type="button" disabled={busy} onClick={screenResume}>{busy ? "Analyzing…" : "Run AI ATS Screening →"}</button></div>
+        <div className="m1-submit-row"><div><strong>{busy ? "Analyzing resume…" : result ? "Screening complete" : "Ready to screen?"}</strong><span>{busy ? "Calling the ATS analysis service and preparing your report." : result ? "Your report is ready below. You can export it as JSON." : "Scores are generated from the submitted resume and job description."}</span></div><button type="button" disabled={busy} onClick={screenResume}>{busy ? "Analyzing…" : result ? "Run Again →" : "Run AI ATS Screening →"}</button></div>
       </div>
 
       {error ? <div className="m1-error" role="alert"><strong>Screening could not complete.</strong><br />{error}<br /><button type="button" className="m1-retry" onClick={screenResume}>Try again</button></div> : null}
