@@ -1,0 +1,14 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+type Report = { id: string; period: { start: string; end: string }; overallScore: number; readinessLevel: string; metrics: Array<{ label: string; score: number | null; attempts: number; completionRate: number }>; strengths: string[]; gaps: string[]; recommendations: string[]; createdAt: string };
+
+export default function ReportPage({ params }: { params: Promise<{ id: string }> }) {
+  const [report, setReport] = useState<Report | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => { void params.then(({ id }) => fetch(`/api/insights/reports/${id}`, { credentials: "include" }).then(async (r) => { const data = await r.json(); if (!r.ok) throw new Error(data?.error?.message ?? "Unable to load report"); setReport(data); }).catch((e) => setError(e instanceof Error ? e.message : "Unable to load report"))); }, [params]);
+
+  return <main style={{ minHeight: "100vh", background: "var(--ih-bg)", color: "var(--ih-text)", padding: "2rem", fontFamily: "var(--ih-font-body)" }}><div style={{ maxWidth: 900, margin: "0 auto" }}><Link href="/dashboard/module-5" style={{ color: "var(--ih-accent)", textDecoration: "none", fontWeight: 700 }}>← Performance Insights</Link>{error && <div role="alert" style={{ marginTop: "1.5rem", padding: "1rem", borderRadius: 12, border: "1px solid var(--ih-danger, #c95d5d)" }}>{error}</div>}{!report && !error && <p style={{ marginTop: "2rem" }}>Loading report…</p>}{report && <><header style={{ margin: "1.5rem 0" }}><p style={{ margin: 0, color: "var(--ih-accent)", font: ".72rem var(--ih-font-mono)" }}>SAVED PERFORMANCE REPORT</p><h1 style={{ fontFamily: "var(--ih-font-display)" }}>{report.overallScore}/100 · {report.readinessLevel.replaceAll("_", " ")}</h1><p>Period: {new Date(report.period.start).toLocaleDateString()} – {new Date(report.period.end).toLocaleDateString()}</p></header><section style={{ display: "grid", gap: "1rem" }}>{report.metrics.map((m) => <div key={m.label} style={{ padding: "1rem", borderRadius: 14, background: "var(--ih-surface)", border: "1px solid var(--ih-surface-border)" }}><strong>{m.label}</strong><span style={{ float: "right" }}>{m.score == null ? "No score" : `${m.score}/100`}</span><div style={{ marginTop: ".6rem", color: "var(--ih-text-muted)" }}>{m.attempts} attempts · {m.completionRate}% completion</div></div>)}<div style={{ padding: "1rem", borderRadius: 14, background: "var(--ih-surface)", border: "1px solid var(--ih-surface-border)" }}><h2>Strengths</h2><ul>{report.strengths.map((x, i) => <li key={`${x}-${i}`}>{x}</li>)}</ul><h2>Gaps</h2><ul>{report.gaps.map((x, i) => <li key={`${x}-${i}`}>{x}</li>)}</ul><h2>Recommendations</h2><ol>{report.recommendations.map((x, i) => <li key={`${x}-${i}`}>{x}</li>)}</ol></div></section></>}</div></main>;
+}
