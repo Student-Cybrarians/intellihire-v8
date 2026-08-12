@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { AtsScreeningResult } from "@/lib/modules/ats/types";
 import "./Module1AtsConsole.css";
 
@@ -17,7 +16,6 @@ type ScreeningResponse = {
 };
 
 export function Module1AtsConsole() {
-  const router = useRouter();
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [company, setCompany] = useState("");
@@ -31,24 +29,16 @@ export function Module1AtsConsole() {
   const resumeWords = useMemo(() => wordCount(resumeText), [resumeText]);
   const jdWords = useMemo(() => wordCount(jobDescription), [jobDescription]);
 
-  function setScreeningUrl(state: "running" | "complete" | "error") {
-    const params = new URLSearchParams(window.location.search);
-    params.set("screening", state);
-    router.replace(`/dashboard/module-1?${params.toString()}`, { scroll: false });
-  }
-
   async function screenResume() {
     const resume = resumeText.trim();
     const jd = jobDescription.trim();
 
     if (resume.length < 100) {
       setError("Please provide at least 100 characters of resume text before screening.");
-      setScreeningUrl("error");
       return;
     }
     if (jd.length < 50) {
       setError("Please provide at least 50 characters of job-description text before screening.");
-      setScreeningUrl("error");
       return;
     }
 
@@ -57,7 +47,6 @@ export function Module1AtsConsole() {
     setWarning(null);
     setResult(null);
     setMode(null);
-    setScreeningUrl("running");
 
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
@@ -87,12 +76,10 @@ export function Module1AtsConsole() {
       setResult(payload.result);
       setMode(payload.mode ?? "ai");
       setWarning(payload.warning ?? null);
-      setScreeningUrl("complete");
       window.setTimeout(() => {
         document.querySelector(".m1-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 50);
     } catch (err) {
-      setScreeningUrl("error");
       if (err instanceof DOMException && err.name === "AbortError") {
         setError("The screening request timed out. Please try again. Module 1 has a deterministic ATS fallback for AI outages.");
       } else {
