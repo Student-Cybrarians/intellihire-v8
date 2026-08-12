@@ -62,3 +62,27 @@ jobs:
           SESSION_SECRET: ci-placeholder-secret-at-least-32-characters-long
           ADMIN_EMAIL: admin@example.com
           OPENROUTER_API_KEY: ci-placeholder
+      - name: Runtime smoke test
+        env:
+          APP_URL: http://127.0.0.1:3000
+          API_URL: http://127.0.0.1:3000
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          GOOGLE_CLIENT_ID: ci-placeholder.apps.googleusercontent.com
+          GOOGLE_CLIENT_SECRET: ci-placeholder
+          GOOGLE_REDIRECT_URI: http://127.0.0.1:3000/api/auth/google/callback
+          SESSION_SECRET: ci-placeholder-secret-at-least-32-characters-long
+          ADMIN_EMAIL: admin@example.com
+          OPENROUTER_API_KEY: ci-placeholder
+        run: |
+          npm run start > /tmp/intellihire-next.log 2>&1 &
+          echo $! > /tmp/intellihire-next.pid
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:3000/api/health >/tmp/health.json; then break; fi
+            sleep 1
+          done
+          test "$(node -e 'console.log(require("/tmp/health.json").status)')" = "healthy"
+          parse_status=$(curl -sS -o /tmp/parse.json -w "%{http_code}" -X POST http://127.0.0.1:3000/api/modules/ats/parse-resume)
+          test "$parse_status" = "401"
+          screen_status=$(curl -sS -o /tmp/screen.json -w "%{http_code}" -X POST http://127.0.0.1:3000/api/modules/ats/screen -H "Content-Type: application/json" -d '{"resumeText":"test"}')
+          test "$screen_status" = "401"
+          kill "$(cat /tmp/intellihire-next.pid)" || true
