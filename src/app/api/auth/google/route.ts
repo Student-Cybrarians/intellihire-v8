@@ -10,7 +10,7 @@ import {
   OAUTH_NONCE_COOKIE,
   OAUTH_RETURN_TO_COOKIE,
   OAUTH_FLOW_TTL_SECONDS,
-  baseCookieOptions,
+  oauthCookieOptions,
 } from "@/lib/cookies";
 import { errorEnvelope } from "@/lib/auth/guards";
 import { logger } from "@/lib/logger";
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
   const authorizationUrl = buildGoogleAuthorizationUrl({ state, nonce, codeChallenge: challenge });
 
   const cookieStore = await cookies();
-  const flowCookieOptions = { ...baseCookieOptions, maxAge: OAUTH_FLOW_TTL_SECONDS };
+  const flowCookieOptions = { ...oauthCookieOptions, maxAge: OAUTH_FLOW_TTL_SECONDS };
   cookieStore.set(OAUTH_STATE_COOKIE, state, flowCookieOptions);
   cookieStore.set(OAUTH_NONCE_COOKIE, nonce, flowCookieOptions);
   cookieStore.set(OAUTH_VERIFIER_COOKIE, verifier, flowCookieOptions);
