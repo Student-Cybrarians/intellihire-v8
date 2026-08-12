@@ -1,8 +1,14 @@
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
 /**
  * Central, fail-fast environment validation. Import `env` instead of touching
  * process.env directly anywhere else in the codebase.
+ *
+ * In local development only, Google OAuth/admin/session values receive safe
+ * development defaults so unrelated application features (including AI)
+ * can boot without requiring production credentials. Production still
+ * requires all real authentication configuration.
  */
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -32,14 +38,37 @@ const envSchema = z.object({
   NVIDIA_MODEL: z.string().min(1).optional(),
 }).superRefine((value, ctx) => {
   if (!value.OPENROUTER_API_KEY && !value.NVIDIA_API_KEY) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["NVIDIA_API_KEY"], message: "Configure NVIDIA_API_KEY or OPENROUTER_API_KEY" });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["NVIDIA_API_KEY"],
+      message: "Configure NVIDIA_API_KEY or OPENROUTER_API_KEY",
+    });
   }
 });
 
 export type Env = z.infer<typeof envSchema>;
 
+function runtimeEnvironment(): NodeJS.ProcessEnv {
+  if (process.env.NODE_ENV !== "development") {
+    return process.env;
+  }
+
+  return {
+    ...process.env,
+    // OAuth is intentionally not silently configured for production. These
+    // placeholders only keep local development bootable; Google sign-in still
+    // requires real credentials before that feature is used.
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "development-placeholder",
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "development-placeholder",
+    ADMIN_EMAIL: process.env.ADMIN_EMAIL || "admin@example.com",
+    SESSION_SECRET:
+      process.env.SESSION_SECRET || randomBytes(48).toString("base64url"),
+  };
+}
+
 function loadEnv(): Env {
-  const parsed = envSchema.safeParse(process.env);
+  const runtimeEnv = runtimeEnvironment();
+  const parsed = envSchema.safeParse(runtimeEnv);
 
   if (!parsed.success) {
     const isBuildOrTest =
@@ -50,7 +79,7 @@ function loadEnv(): Env {
       .join("\n")}`;
 
     if (isBuildOrTest) {
-      return process.env as unknown as Env;
+      return runtimeEnv as unknown as Env;
     }
 
     throw new Error(message);
@@ -62,7 +91,7 @@ function loadEnv(): Env {
 export const env = loadEnv();
 
 export function assertEnvOrThrow(): void {
-  const parsed = envSchema.safeParse(process.env);
+  const parsed = envSchema.safeParse(runtimeEnvironment());
   if (!parsed.success) {
     throw new Error(
       `Startup aborted — invalid environment configuration:\n${parsed.error.issues
