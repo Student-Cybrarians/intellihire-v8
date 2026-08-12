@@ -21,8 +21,15 @@ const envSchema = z.object({
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters of high-entropy data"),
 
-  OPENROUTER_API_KEY: z.string().min(1, "OPENROUTER_API_KEY is required"),
+  OPENROUTER_API_KEY: z.string().min(1).optional(),
   OPENROUTER_MODEL: z.string().min(1).optional(),
+  NVIDIA_API_KEY: z.string().min(1).optional(),
+  NVIDIA_API_BASE_URL: z.string().url().optional(),
+  NVIDIA_MODEL: z.string().min(1).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.OPENROUTER_API_KEY && !value.NVIDIA_API_KEY) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["NVIDIA_API_KEY"], message: "Configure NVIDIA_API_KEY or OPENROUTER_API_KEY" });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
