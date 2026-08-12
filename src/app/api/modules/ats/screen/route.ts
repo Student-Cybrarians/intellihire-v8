@@ -6,9 +6,13 @@ import type { AtsScreeningResult } from "@/lib/modules/ats/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Keep the route below Vercel's interactive function timeout. The ATS engine
+// always has a deterministic local fallback, so an upstream AI outage must
+// never leave the user waiting until the function is killed.
 export const maxDuration = 15;
 
 const noStore = { "Cache-Control": "no-store, max-age=0" };
+const AI_ATTEMPT_TIMEOUT_MS = 6_000;
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: noStore });
@@ -58,13 +62,16 @@ function normalizeTokens(text: string): Set<string> {
 function fallbackScreen(resumeText: string, jobDescription: string): AtsScreeningResult {
   const resume = normalizeTokens(resumeText);
   const jd = normalizeTokens(jobDescription);
-  const stopWords = new Set(["the", "and", "with", "for", "you", "are", "our", "this", "that", "from", "will", "have", "your", "their", "they"]);
+  const stopWords = new Set([
+    "the", "and", "with", "for", "you", "are", "our", "this", "that", "from", "will", "have", "your", "their", "they",
+    "must", "should", "good", "skills", "skill", "experience", "candidate", "position", "role", "work", "using", "including",
+  ]);
   const required = [...jd].filter((token) => !stopWords.has(token));
   const matched = required.filter((token) => resume.has(token));
   const missing = required.filter((token) => !resume.has(token));
   const keywordMatch = required.length ? Math.round((matched.length / required.length) * 100) : 0;
   const experienceFit = /experience|years|intern|developer|engineer|project/i.test(resumeText) ? 70 : 40;
-  const educationFit = /bachelor|master|degree|university|college|b\.s\.|m\.s\./i.test(resumeText) ? 80 : 45;
+  const educationFit = /bachelor|master|degree|university|college|diploma|b\.s\.|m\.s\./i.test(resumeText) ? 80 : 45;
   const atsCompatibility = Math.min(100, 55 + (resumeText.length > 500 ? 20 : 0) + (resumeText.length > 1200 ? 15 : 0));
   const overallScore = Math.round(0.45 * keywordMatch + 0.2 * experienceFit + 0.15 * educationFit + 0.2 * atsCompatibility);
   return {
@@ -86,11 +93,25 @@ function fallbackScreen(resumeText: string, jobDescription: string): AtsScreenin
   };
 }
 
-export async function POST(request: Request) {
-  const auth = await getCurrentAuth();
-  if (!auth) return json({ error: "AUTH_REQUIRED", message: "Please sign in before running Module 1." }, 401);
-
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`AI analysis timed out after ${timeoutMs / 1000} seconds.`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await getCurrentAuth();
+    if (!auth) return json({ error: "AUTH_REQUIRED", message: "Please sign in before running Module 1." }, 401);
+
     const body = (await request.json()) as { resumeText?: unknown; jobDescription?: unknown };
     const resumeText = typeof body.resumeText === "string" ? body.resumeText.trim() : "";
     const jobDescription = typeof body.jobDescription === "string" ? body.jobDescription.trim() : "";
@@ -100,20 +121,23 @@ export async function POST(request: Request) {
     if (resumeText.length > 30_000 || jobDescription.length > 20_000) return json({ error: "INPUT_TOO_LARGE", message: "Input is too large for screening." }, 413);
 
     try {
-      const response = await aiService.analyzeText(auth.user.id, {
-        capability: "reasoning",
-        prompt: buildAtsPrompt(resumeText, jobDescription),
-        systemPrompt: "You are IntelliHire's ATS evaluator. Return ONLY valid JSON matching the requested schema. Do not use markdown fences.",
-        maxTokens: 1400,
-        temperature: 0.2,
-      });
+      const response = await withTimeout(
+        aiService.analyzeText(auth.user.id, {
+          capability: "reasoning",
+          prompt: buildAtsPrompt(resumeText, jobDescription),
+          systemPrompt: "You are IntelliHire's ATS evaluator. Return ONLY valid JSON matching the requested schema. Do not use markdown fences.",
+          maxTokens: 1400,
+          temperature: 0.2,
+        }),
+        AI_ATTEMPT_TIMEOUT_MS,
+      );
       return json({ result: parseResult(response.text), mode: "ai", model: response.model, correlationId: response.correlationId });
     } catch (aiError) {
       const result = fallbackScreen(resumeText, jobDescription);
       return json({
         result,
         mode: "fallback",
-        warning: aiError instanceof Error ? `AI enrichment unavailable: ${aiError.message}` : "AI enrichment unavailable; ATS text analysis was used.",
+        warning: aiError instanceof Error ? `AI enrichment unavailable; deterministic ATS analysis was used. (${aiError.message})` : "AI enrichment unavailable; deterministic ATS analysis was used.",
       });
     }
   } catch (error) {
