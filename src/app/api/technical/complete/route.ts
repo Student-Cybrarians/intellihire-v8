@@ -10,8 +10,11 @@ export async function POST(request: Request) {
   if (!auth) return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, { status: 401 });
   try {
     const body = schema.parse(await request.json());
-    return NextResponse.json(await completeInterview(auth.user.id, body.interviewId));
+    return NextResponse.json(await completeInterview(auth.user.id, body.interviewId), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: { code: "TECHNICAL_COMPLETE_FAILED", message: (error as Error).message } }, { status: 400 });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Invalid interview id" } }, { status: 422 });
+    const code = (error as { code?: string }).code;
+    const status = code === "NOT_FOUND" ? 404 : code === "CONFLICT" ? 409 : code === "INCOMPLETE" ? 422 : 400;
+    return NextResponse.json({ error: { code: code ?? "TECHNICAL_COMPLETE_FAILED", message: error instanceof Error ? error.message : "Unable to complete interview" } }, { status });
   }
 }
