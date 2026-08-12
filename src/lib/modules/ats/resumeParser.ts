@@ -40,7 +40,7 @@ function detectType(file: File, buffer: Buffer): ResumeDocumentType {
 
   if (startsWithBytes(buffer, [0x25, 0x50, 0x44, 0x46, 0x2d])) return "pdf";
   if (startsWithBytes(buffer, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) return "doc";
-  if (startsWithBytes(buffer, [0x50, 0x4b, 0x03, 0x04])) return extension === "docx" || mime.includes("wordprocessingml") ? "docx" : "docx";
+  if (startsWithBytes(buffer, [0x50, 0x4b, 0x03, 0x04])) return "docx";
 
   if (extension === "pdf" || mime === "application/pdf") return "pdf";
   if (extension === "doc" || mime === "application/msword") return "doc";
@@ -70,7 +70,7 @@ function stripHtml(value: string): string {
   return value
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<br\s*\/?>(?=.)/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>|<\/div>|<\/li>|<\/h[1-6]>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
@@ -92,8 +92,7 @@ function stripRtf(value: string): string {
 
 async function extractPdf(buffer: Buffer): Promise<string> {
   const { PDFParse } = await import("pdf-parse");
-  const { CanvasFactory } = await import("pdf-parse/worker");
-  const parser = new PDFParse({ data: new Uint8Array(buffer), CanvasFactory });
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
   try {
     const result = await parser.getText();
     return result.text;
@@ -119,12 +118,8 @@ async function extractWord(buffer: Buffer): Promise<string> {
 }
 
 export async function parseResumeFile(file: File): Promise<ResumeParseResult> {
-  if (file.size <= 0) {
-    throw new ResumeParseError("The uploaded file is empty.", "INVALID_FILE");
-  }
-  if (file.size > MAX_RESUME_BYTES) {
-    throw new ResumeParseError("Resume files must be 8 MB or smaller.", "FILE_TOO_LARGE");
-  }
+  if (file.size <= 0) throw new ResumeParseError("The uploaded file is empty.", "INVALID_FILE");
+  if (file.size > MAX_RESUME_BYTES) throw new ResumeParseError("Resume files must be 8 MB or smaller.", "FILE_TOO_LARGE");
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const documentType = detectType(file, buffer);
@@ -132,22 +127,12 @@ export async function parseResumeFile(file: File): Promise<ResumeParseResult> {
   try {
     let extracted: string;
     switch (documentType) {
-      case "pdf":
-        extracted = await extractPdf(buffer);
-        break;
+      case "pdf": extracted = await extractPdf(buffer); break;
       case "doc":
-      case "docx":
-        extracted = await extractWord(buffer);
-        break;
-      case "rtf":
-        extracted = stripRtf(buffer.toString("utf8"));
-        break;
-      case "html":
-        extracted = stripHtml(buffer.toString("utf8"));
-        break;
-      case "text":
-        extracted = buffer.toString("utf8");
-        break;
+      case "docx": extracted = await extractWord(buffer); break;
+      case "rtf": extracted = stripRtf(buffer.toString("utf8")); break;
+      case "html": extracted = stripHtml(buffer.toString("utf8")); break;
+      case "text": extracted = buffer.toString("utf8"); break;
     }
 
     const text = normalizeText(extracted);
@@ -159,11 +144,7 @@ export async function parseResumeFile(file: File): Promise<ResumeParseResult> {
     }
 
     const truncated = text.length > MAX_EXTRACTED_CHARS;
-    return {
-      text: truncated ? text.slice(0, MAX_EXTRACTED_CHARS).trimEnd() : text,
-      documentType,
-      truncated,
-    };
+    return { text: truncated ? text.slice(0, MAX_EXTRACTED_CHARS).trimEnd() : text, documentType, truncated };
   } catch (error) {
     if (error instanceof ResumeParseError) throw error;
     throw new ResumeParseError(
@@ -173,7 +154,4 @@ export async function parseResumeFile(file: File): Promise<ResumeParseResult> {
   }
 }
 
-export const resumeParserLimits = {
-  maxBytes: MAX_RESUME_BYTES,
-  maxCharacters: MAX_EXTRACTED_CHARS,
-};
+export const resumeParserLimits = { maxBytes: MAX_RESUME_BYTES, maxCharacters: MAX_EXTRACTED_CHARS };
