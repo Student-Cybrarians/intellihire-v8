@@ -1,1 +1,0 @@
-This branch exists to reconcile the local a34dfc7 state with remote master-branch. No application changes are intended.
