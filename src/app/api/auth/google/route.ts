@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { buildGoogleAuthorizationUrl, generatePkcePair } from "@/lib/oauth/google";
-import { generateState, generateNonce } from "@/lib/crypto";
+import { generateNonce, sealOAuthTransaction } from "@/lib/crypto";
 import { sanitizeReturnTo } from "@/lib/safeRedirect";
 import { rateLimit } from "@/lib/rateLimit";
 import {
@@ -31,13 +31,17 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
-
-  const state = generateState();
   const nonce = generateNonce();
   const { verifier, challenge } = generatePkcePair();
 
+  // Keep state opaque: it carries the PKCE verifier/nonce encrypted with the
+  // server-only SESSION_SECRET, so the callback does not depend on browser
+  // cookies surviving the cross-site Google redirect.
+  const state = sealOAuthTransaction({ verifier, nonce, returnTo });
   const authorizationUrl = buildGoogleAuthorizationUrl({ state, nonce, codeChallenge: challenge });
 
+  // Cookies remain as a compatibility/fallback mechanism, but they are no
+  // longer the source of truth for the OAuth transaction.
   const cookieStore = await cookies();
   const flowCookieOptions = { ...oauthCookieOptions, maxAge: OAUTH_FLOW_TTL_SECONDS };
   cookieStore.set(OAUTH_STATE_COOKIE, state, flowCookieOptions);
