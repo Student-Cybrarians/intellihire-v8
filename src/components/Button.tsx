@@ -8,11 +8,6 @@ interface ButtonProps {
   children: React.ReactNode;
 }
 
-const variantStyles: Record<ButtonProps['variant'], string> = {
-  contained: 'background-color: #1976d2; color: white;',
-  outlined: 'border: 1px solid #1976d2; color: #1976d2;',
-};
-
 const colorStyles: Record<ButtonProps['color'], string> = {
   primary: '#1976d2',
   secondary: '#607d8b',
@@ -31,21 +26,21 @@ export const Button: FC<ButtonProps> = ({
     'px-4 py-2 rounded-md font-medium text-sm',
     ...(variant === 'contained' ? ['hover:bg-blue-600'] : ['hover:bg-gray-200']),
     ...(variant === 'outlined' ? ['hover:border-blue-600'] : []),
-    ...(color === 'primary' ? ['hover:bg-blue-600'] : color === 'secondary' ? ['hover:bg-gray-300'] : ''),
+    ...(color === 'primary'
+      ? ['hover:bg-blue-600']
+      : color === 'secondary'
+        ? ['hover:bg-gray-300']
+        : color === 'success'
+          ? ['hover:bg-green-600']
+          : ['hover:bg-red-600']),
     ...(disabled ? ['opacity-50 cursor-not-allowed'] : []),
   ].join(' ');
 
   const style = {
-    backgroundColor: colorStyles[color],
-    color: '#fff',
-    ...(variant === 'contained' && {
-      border: 'none',
-      cursor: disabled ? 'not-allowed' : 'pointer',
-    }),
-    ...(variant === 'outlined' && {
-      border: '1px solid currentColor',
-      color: 'currentColor',
-    }),
+    backgroundColor: variant === 'outlined' ? 'transparent' : colorStyles[color],
+    color: variant === 'outlined' ? colorStyles[color] : '#fff',
+    border: variant === 'outlined' ? `1px solid ${colorStyles[color]}` : 'none',
+    cursor: disabled ? 'not-allowed' : 'pointer',
   };
 
   return (
@@ -54,6 +49,7 @@ export const Button: FC<ButtonProps> = ({
       disabled={disabled}
       onClick={onClick}
       style={style}
+      type="button"
     >
       {children}
     </button>
