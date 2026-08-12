@@ -29,8 +29,16 @@ export function Module1AtsConsole() {
   const resumeWords = useMemo(() => wordCount(resumeText), [resumeText]);
   const jdWords = useMemo(() => wordCount(jobDescription), [jobDescription]);
 
-  async function screenResume(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function screenResume() {
+    if (resumeText.trim().length < 100) {
+      setError("Please provide at least 100 characters of resume text before screening.");
+      return;
+    }
+    if (jobDescription.trim().length < 50) {
+      setError("Please provide at least 50 characters of job-description text before screening.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     setWarning(null);
@@ -61,7 +69,9 @@ export function Module1AtsConsole() {
       setResult(payload.result);
       setMode(payload.mode ?? "ai");
       setWarning(payload.warning ?? null);
-      requestAnimationFrame(() => document.querySelector(".m1-results")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      window.setTimeout(() => {
+        document.querySelector(".m1-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError("The screening request took too long. Please try again; the server has a deterministic ATS fallback for AI outages.");
@@ -107,14 +117,14 @@ export function Module1AtsConsole() {
         {steps.map((step, index) => <div className="m1-step" key={step}><span>{String(index + 1).padStart(2, "0")}</span><strong>{step}</strong>{index < steps.length - 1 ? <i aria-hidden="true">→</i> : null}</div>)}
       </section>
 
-      <form className="m1-form" onSubmit={screenResume}>
-        <section className="m1-panel m1-panel--resume"><div className="m1-panel-heading"><div><span className="m1-panel-index">01</span><div><h2>Candidate Resume</h2><p>Paste the extracted resume text for analysis.</p></div></div><span className="m1-count">{resumeWords} words</span></div><textarea value={resumeText} onChange={(event) => setResumeText(event.target.value)} placeholder="Name, summary, education, experience, projects, skills, certifications..." rows={18} required /></section>
-        <section className="m1-panel"><div className="m1-panel-heading"><div><span className="m1-panel-index">02</span><div><h2>Target Job Description</h2><p>Use the actual posting you want to prepare for.</p></div></div><span className="m1-count">{jdWords} words</span></div><textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder="Responsibilities, required skills, qualifications, experience, technologies..." rows={18} required /></section>
+      <div className="m1-form">
+        <section className="m1-panel m1-panel--resume"><div className="m1-panel-heading"><div><span className="m1-panel-index">01</span><div><h2>Candidate Resume</h2><p>Paste the extracted resume text for analysis.</p></div></div><span className="m1-count">{resumeWords} words</span></div><textarea value={resumeText} onChange={(event) => setResumeText(event.target.value)} placeholder="Name, summary, education, experience, projects, skills, certifications..." rows={18} aria-label="Candidate resume" /></section>
+        <section className="m1-panel"><div className="m1-panel-heading"><div><span className="m1-panel-index">02</span><div><h2>Target Job Description</h2><p>Use the actual posting you want to prepare for.</p></div></div><span className="m1-count">{jdWords} words</span></div><textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder="Responsibilities, required skills, qualifications, experience, technologies..." rows={18} aria-label="Target job description" /></section>
         <section className="m1-panel m1-target-panel"><div className="m1-panel-heading"><div><span className="m1-panel-index">03</span><div><h2>Target Context</h2><p>Optional context used to personalize the screening.</p></div></div></div><div className="m1-target-grid"><label><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} placeholder="e.g. Acme Technologies" /></label><label><span>Target role</span><input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} placeholder="e.g. Software Engineer" /></label></div></section>
-        <div className="m1-submit-row"><div><strong>{busy ? "Analyzing resume…" : "Ready to screen?"}</strong><span>{busy ? "Calling the ATS analysis service and preparing your report." : "Scores are generated from the submitted resume and job description."}</span></div><button type="submit" disabled={busy}>{busy ? "Analyzing…" : "Run AI ATS Screening →"}</button></div>
-      </form>
+        <div className="m1-submit-row"><div><strong>{busy ? "Analyzing resume…" : "Ready to screen?"}</strong><span>{busy ? "Calling the ATS analysis service and preparing your report." : "Scores are generated from the submitted resume and job description."}</span></div><button type="button" disabled={busy} onClick={screenResume}>{busy ? "Analyzing…" : "Run AI ATS Screening →"}</button></div>
+      </div>
 
-      {error ? <div className="m1-error" role="alert"><strong>Screening could not complete.</strong><br />{error}<br /><button type="button" className="m1-retry" onClick={() => document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()}>Try again</button></div> : null}
+      {error ? <div className="m1-error" role="alert"><strong>Screening could not complete.</strong><br />{error}<br /><button type="button" className="m1-retry" onClick={screenResume}>Try again</button></div> : null}
 
       {result ? <section className="m1-results" aria-live="polite">
         <div className="m1-results-header"><div><p className="m1-kicker">SCREENING COMPLETE</p><h2>Candidate Match Report</h2><p>{company || "Target company not specified"} · {targetRole || "Target role not specified"}</p></div><div className="m1-results-actions">{mode === "fallback" ? <span className="m1-mode-warning">ATS text analysis · AI enrichment unavailable</span> : <span className="m1-mode-success">AI analysis completed</span>}<button type="button" className="m1-secondary-button" onClick={downloadReport}>Export JSON report</button></div></div>
