@@ -51,6 +51,7 @@ jobs:
           GOOGLE_CLIENT_SECRET: ci-placeholder
           GOOGLE_REDIRECT_URI: https://ci-placeholder.invalid/api/auth/google/callback
           SESSION_SECRET: ci-placeholder-secret-at-least-32-characters-long
+          ADMIN_EMAIL: admin@example.com
           OPENROUTER_API_KEY: ci-placeholder
 
       - name: Build
@@ -63,4 +64,5 @@ jobs:
           GOOGLE_CLIENT_SECRET: ci-placeholder
           GOOGLE_REDIRECT_URI: https://ci-placeholder.invalid/api/auth/google/callback
           SESSION_SECRET: ci-placeholder-secret-at-least-32-characters-long
+          ADMIN_EMAIL: admin@example.com
           OPENROUTER_API_KEY: ci-placeholder
