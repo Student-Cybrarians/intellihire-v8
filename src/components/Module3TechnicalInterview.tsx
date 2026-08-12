@@ -2,13 +2,42 @@
 
 import { useEffect, useState, type ChangeEvent } from "react";
 
+type TechnicalQuestion = {
+  id: string;
+  kind: string;
+  prompt: string;
+};
+
+type TechnicalSession = {
+  id: string;
+  answered: number;
+  total: number;
+  currentQuestion?: TechnicalQuestion;
+};
+
+type TechnicalEvaluation = {
+  correctness: number;
+  problemSolving: number;
+  communication: number;
+  improvements: string[];
+};
+
+type TechnicalResult = {
+  overallScore: number;
+  correctness: number;
+  problemSolving: number;
+  communication: number;
+  strengths: string[];
+  improvements: string[];
+};
+
 export function Module3TechnicalInterview() {
   const [role, setRole] = useState("Software Engineer");
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<TechnicalSession | null>(null);
   const [answer, setAnswer] = useState("");
   const [code, setCode] = useState("");
-  const [evaluation, setEvaluation] = useState<any>(null);
-  const [result, setResult] = useState<any>(null);
+  const [evaluation, setEvaluation] = useState<TechnicalEvaluation | null>(null);
+  const [result, setResult] = useState<TechnicalResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,9 +48,10 @@ export function Module3TechnicalInterview() {
       const response = await fetch("/api/technical/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ role }),
       });
-      const data = await response.json();
+      const data = (await response.json()) as TechnicalSession & { error?: { message?: string } };
       if (!response.ok) throw new Error(data.error?.message ?? "Unable to start interview");
       setSession(data);
       setEvaluation(null);
@@ -44,6 +74,7 @@ export function Module3TechnicalInterview() {
       const response = await fetch("/api/technical/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           interviewId: session.id,
           questionId: session.currentQuestion.id,
@@ -51,7 +82,7 @@ export function Module3TechnicalInterview() {
           code: code || null,
         }),
       });
-      const data = await response.json();
+      const data = (await response.json()) as { evaluation: TechnicalEvaluation; interview: TechnicalSession; error?: { message?: string } };
       if (!response.ok) throw new Error(data.error?.message ?? "Unable to evaluate response");
       setEvaluation(data.evaluation);
       setSession(data.interview);
@@ -72,9 +103,10 @@ export function Module3TechnicalInterview() {
       const response = await fetch("/api/technical/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ interviewId: session.id }),
       });
-      const data = await response.json();
+      const data = (await response.json()) as TechnicalResult & { error?: { message?: string } };
       if (!response.ok) throw new Error(data.error?.message ?? "Unable to complete interview");
       setResult(data);
     } catch (e) {
@@ -131,7 +163,7 @@ export function Module3TechnicalInterview() {
               <button type="button" onClick={submit} disabled={!answer.trim() || busy} style={{ marginTop: 18, width: "100%", padding: ".9rem 1rem", borderRadius: 10, border: 0, background: "var(--ih-accent)", color: "var(--ih-accent-ink)", fontWeight: 800, opacity: !answer.trim() || busy ? .5 : 1 }}>{busy ? "Evaluating…" : "Submit response"}</button>
             </div>
             <aside style={{ display: "grid", gap: 14, alignContent: "start" }}>
-              <div style={{ background: "var(--ih-surface)", border: "1px solid var(--ih-surface-border)", borderRadius: 16, padding: 18 }}><div style={{ font: "600 .7rem var(--ih-font-mono)", color: "var(--ih-accent)" }}>INTERVIEWER FEEDBACK</div>{evaluation ? <div style={{ marginTop: 12 }}><Metric label="Correctness" value={evaluation.correctness} /><Metric label="Problem solving" value={evaluation.problemSolving} /><Metric label="Communication" value={evaluation.communication} /><ul>{evaluation.improvements.map((x: string) => <li key={x}>{x}</li>)}</ul></div> : <p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Submit a response to receive evidence-based feedback.</p>}</div>
+              <div style={{ background: "var(--ih-surface)", border: "1px solid var(--ih-surface-border)", borderRadius: 16, padding: 18 }}><div style={{ font: "600 .7rem var(--ih-font-mono)", color: "var(--ih-accent)" }}>INTERVIEWER FEEDBACK</div>{evaluation ? <div style={{ marginTop: 12 }}><Metric label="Correctness" value={evaluation.correctness} /><Metric label="Problem solving" value={evaluation.problemSolving} /><Metric label="Communication" value={evaluation.communication} /><ul>{evaluation.improvements.map((x) => <li key={x}>{x}</li>)}</ul></div> : <p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Submit a response to receive evidence-based feedback.</p>}</div>
               <div style={{ background: "var(--ih-surface)", border: "1px solid var(--ih-surface-border)", borderRadius: 16, padding: 18 }}><div style={{ font: "600 .7rem var(--ih-font-mono)", color: "var(--ih-accent)" }}>SESSION</div><p style={{ marginBottom: 8 }}>Question {session.answered + 1} of {session.total}</p><button type="button" onClick={complete} disabled={busy || session.answered === 0} style={{ width: "100%", padding: ".75rem 1rem", borderRadius: 10, border: "1px solid var(--ih-surface-border)", background: "transparent", color: "inherit", opacity: busy || session.answered === 0 ? .5 : 1 }}>Finish interview</button></div>
             </aside>
           </section>
