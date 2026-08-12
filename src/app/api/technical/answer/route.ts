@@ -15,8 +15,14 @@ export async function POST(request: Request) {
   if (!auth) return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, { status: 401 });
   try {
     const body = schema.parse(await request.json());
-    return NextResponse.json(await answerQuestion(auth.user.id, body.interviewId, body.questionId, body.answerText, body.code ?? null));
+    return NextResponse.json(
+      await answerQuestion(auth.user.id, body.interviewId, body.questionId, body.answerText, body.code ?? null),
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
-    return NextResponse.json({ error: { code: "TECHNICAL_ANSWER_FAILED", message: (error as Error).message } }, { status: 400 });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Invalid answer payload" } }, { status: 422 });
+    const code = (error as { code?: string }).code;
+    const status = code === "NOT_FOUND" ? 404 : code === "CONFLICT" ? 409 : 400;
+    return NextResponse.json({ error: { code: code ?? "TECHNICAL_ANSWER_FAILED", message: error instanceof Error ? error.message : "Unable to evaluate response" } }, { status });
   }
 }
