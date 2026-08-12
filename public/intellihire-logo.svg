@@ -1,0 +1,47 @@
+<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">IntelliHire v8</title>
+  <desc id="desc">IntelliHire AI hiring logo with a human and circuit profile, purple, peach, coral and gold accents.</desc>
+  <defs>
+    <linearGradient id="ribbon" x1="30" y1="110" x2="500" y2="340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F0C38E"/>
+      <stop offset="0.55" stop-color="#F1AA9B"/>
+      <stop offset="1" stop-color="#F0C38E"/>
+    </linearGradient>
+    <linearGradient id="word" x1="520" y1="210" x2="1080" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F0C38E"/>
+      <stop offset="0.55" stop-color="#F1AA9B"/>
+      <stop offset="1" stop-color="#F0C38E"/>
+    </linearGradient>
+    <linearGradient id="purple" x1="100" y1="90" x2="430" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#48426D"/>
+      <stop offset="1" stop-color="#312051"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(30 28)">
+    <circle cx="112" cy="66" r="34" fill="#F0C38E"/>
+    <path d="M82 111H143V243H82V111Z" fill="#312051"/>
+    <path d="M82 111C96 101 115 101 143 111V243H82V111Z" fill="url(#purple)"/>
+    <path d="M82 111L143 111L143 148C126 135 105 131 82 142V111Z" fill="#48426D"/>
+
+    <path d="M259 47C321 23 381 52 395 112C401 140 391 166 371 184C354 199 342 216 342 241H253V91C253 73 255 58 259 47Z" fill="url(#purple)"/>
+    <path d="M339 94L366 94M339 94L339 124M339 124L311 124M311 124L311 154M311 154L284 154M284 154L284 187M284 187L258 187" stroke="#F1AA9B" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="366" cy="94" r="9" fill="#F0C38E"/>
+    <circle cx="339" cy="124" r="9" fill="#F0C38E"/>
+    <circle cx="311" cy="124" r="9" fill="#F0C38E"/>
+    <circle cx="284" cy="154" r="9" fill="#F0C38E"/>
+    <circle cx="258" cy="187" r="9" fill="#F0C38E"/>
+
+    <path d="M34 244C109 145 175 101 245 94" stroke="url(#ribbon)" stroke-width="24" stroke-linecap="round"/>
+    <path d="M28 269C116 170 188 137 263 133" stroke="url(#ribbon)" stroke-width="10" stroke-linecap="round" opacity="0.92"/>
+    <path d="M176 276L212 205L248 276L212 326L176 276Z" fill="url(#ribbon)"/>
+    <circle cx="212" cy="205" r="24" fill="#F0C38E"/>
+    <path d="M180 274H244" stroke="#F1AA9B" stroke-width="10" stroke-linecap="round"/>
+  </g>
+
+  <text x="505" y="238" font-family="Space Grotesk, Inter, Arial, sans-serif" font-size="116" font-weight="700" letter-spacing="-5" fill="url(#word)">IntelliHire</text>
+  <text x="1090" y="238" font-family="Space Grotesk, Inter, Arial, sans-serif" font-size="72" font-weight="600" fill="#48426D">v8</text>
+  <path d="M510 274H1110" stroke="url(#ribbon)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M806 255L816 270L831 280L816 290L806 306L796 290L781 280L796 270L806 255Z" fill="#F0C38E"/>
+  <text x="510" y="322" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="600" letter-spacing="6" fill="#F0C38E">SMARTER HIRING  •  BETTER TEAMS  •  BRIGHTER FUTURES</text>
+</svg>
