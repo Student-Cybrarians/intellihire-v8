@@ -21,6 +21,10 @@ const envSchema = z.object({
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters of high-entropy data"),
 
+  // Exactly one Google account may be the application administrator. Keep this
+  // server-only; never expose it through NEXT_PUBLIC_* variables.
+  ADMIN_EMAIL: z.string().email("ADMIN_EMAIL must be a valid email address"),
+
   OPENROUTER_API_KEY: z.string().min(1).optional(),
   OPENROUTER_MODEL: z.string().min(1).optional(),
   NVIDIA_API_KEY: z.string().min(1).optional(),
