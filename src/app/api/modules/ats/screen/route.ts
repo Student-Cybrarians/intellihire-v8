@@ -5,6 +5,14 @@ import { buildAtsPrompt } from "@/lib/modules/ats/prompt";
 import type { AtsScreeningResult } from "@/lib/modules/ats/types";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 15;
+
+const noStore = { "Cache-Control": "no-store, max-age=0" };
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: noStore });
+}
 
 function clampScore(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
@@ -16,10 +24,10 @@ function parseResult(text: string): AtsScreeningResult {
   const raw = fenced ?? text;
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
-  const json = start >= 0 && end > start ? raw.slice(start, end + 1) : raw;
+  const jsonText = start >= 0 && end > start ? raw.slice(start, end + 1) : raw;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(json);
+    parsed = JSON.parse(jsonText);
   } catch {
     throw new Error("The AI response was not valid JSON. Please try screening again.");
   }
@@ -50,7 +58,8 @@ function normalizeTokens(text: string): Set<string> {
 function fallbackScreen(resumeText: string, jobDescription: string): AtsScreeningResult {
   const resume = normalizeTokens(resumeText);
   const jd = normalizeTokens(jobDescription);
-  const required = [...jd].filter((token) => !["the", "and", "with", "for", "you", "are", "our", "this", "that", "from", "will", "have"].includes(token));
+  const stopWords = new Set(["the", "and", "with", "for", "you", "are", "our", "this", "that", "from", "will", "have", "your", "their", "they"]);
+  const required = [...jd].filter((token) => !stopWords.has(token));
   const matched = required.filter((token) => resume.has(token));
   const missing = required.filter((token) => !resume.has(token));
   const keywordMatch = required.length ? Math.round((matched.length / required.length) * 100) : 0;
@@ -64,7 +73,7 @@ function fallbackScreen(resumeText: string, jobDescription: string): AtsScreenin
     keywordMatch,
     experienceFit,
     educationFit,
-    summary: `Screening completed using the available ATS text-matching engine. ${matched.length} job-description terms were found in the supplied resume. AI enrichment can be retried when the provider is available.`,
+    summary: `Screening completed using the ATS text-matching engine. ${matched.length} job-description terms were found in the supplied resume.`,
     matchedSkills: matched.slice(0, 8),
     missingSkills: missing.slice(0, 8),
     strengths: [
@@ -79,15 +88,16 @@ function fallbackScreen(resumeText: string, jobDescription: string): AtsScreenin
 
 export async function POST(request: Request) {
   const auth = await getCurrentAuth();
-  if (!auth) return NextResponse.json({ error: "AUTH_REQUIRED", message: "Please sign in before running Module 1." }, { status: 401 });
+  if (!auth) return json({ error: "AUTH_REQUIRED", message: "Please sign in before running Module 1." }, 401);
 
   try {
     const body = (await request.json()) as { resumeText?: unknown; jobDescription?: unknown };
     const resumeText = typeof body.resumeText === "string" ? body.resumeText.trim() : "";
     const jobDescription = typeof body.jobDescription === "string" ? body.jobDescription.trim() : "";
-    if (resumeText.length < 100) return NextResponse.json({ error: "RESUME_TOO_SHORT", message: "Resume text must be at least 100 characters." }, { status: 400 });
-    if (jobDescription.length < 50) return NextResponse.json({ error: "JOB_DESCRIPTION_TOO_SHORT", message: "Job description must be at least 50 characters." }, { status: 400 });
-    if (resumeText.length > 30_000 || jobDescription.length > 20_000) return NextResponse.json({ error: "INPUT_TOO_LARGE", message: "Input is too large for screening." }, { status: 413 });
+
+    if (resumeText.length < 100) return json({ error: "RESUME_TOO_SHORT", message: "Resume text must be at least 100 characters." }, 400);
+    if (jobDescription.length < 50) return json({ error: "JOB_DESCRIPTION_TOO_SHORT", message: "Job description must be at least 50 characters." }, 400);
+    if (resumeText.length > 30_000 || jobDescription.length > 20_000) return json({ error: "INPUT_TOO_LARGE", message: "Input is too large for screening." }, 413);
 
     try {
       const response = await aiService.analyzeText(auth.user.id, {
@@ -97,16 +107,16 @@ export async function POST(request: Request) {
         maxTokens: 1400,
         temperature: 0.2,
       });
-      return NextResponse.json({ result: parseResult(response.text), mode: "ai", model: response.model, correlationId: response.correlationId });
+      return json({ result: parseResult(response.text), mode: "ai", model: response.model, correlationId: response.correlationId });
     } catch (aiError) {
       const result = fallbackScreen(resumeText, jobDescription);
-      return NextResponse.json({
+      return json({
         result,
         mode: "fallback",
         warning: aiError instanceof Error ? `AI enrichment unavailable: ${aiError.message}` : "AI enrichment unavailable; ATS text analysis was used.",
       });
     }
   } catch (error) {
-    return NextResponse.json({ error: "ATS_SCREENING_FAILED", message: error instanceof Error ? error.message : "ATS screening failed." }, { status: 500 });
+    return json({ error: "ATS_SCREENING_FAILED", message: error instanceof Error ? error.message : "ATS screening failed." }, 500);
   }
 }
