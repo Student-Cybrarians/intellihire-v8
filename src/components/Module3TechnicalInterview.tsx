@@ -28,10 +28,12 @@ export function Module3TechnicalInterview() {
   };
 
   useEffect(() => {
-    void start();
-    // This effect intentionally starts the persisted interview request on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-  }, []);
+    // Defer the initial network action until after the mount commit. This avoids
+    // a synchronous state update from the effect while still starting the
+    // persisted interview automatically for the user.
+    const timer = window.setTimeout(() => { void start(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     if (!session?.currentQuestion || !answer.trim() || busy) return;
