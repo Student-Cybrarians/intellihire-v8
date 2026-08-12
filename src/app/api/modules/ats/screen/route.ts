@@ -9,8 +9,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 15;
 
 const noStore = { "Cache-Control": "no-store, max-age=0" };
-// The local ATS engine is deterministic and fast. AI is enrichment only and
-// must never be allowed to make the Module 1 demo/request hang.
 const AI_ATTEMPT_TIMEOUT_MS = 4_000;
 
 function json(data: unknown, status = 200) {
@@ -201,12 +199,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Always have a valid result before attempting an external AI provider.
-    // This is important for production reliability and for deployments where
-    // OPENROUTER_API_KEY is intentionally not configured.
     const fallback = fallbackScreen(resumeText, jobDescription);
+    const aiConfigured = Boolean(
+      process.env.NVIDIA_API_KEY?.trim() || process.env.OPENROUTER_API_KEY?.trim(),
+    );
 
-    if (!process.env.OPENROUTER_API_KEY?.trim()) {
+    if (!aiConfigured) {
       return json({
         result: fallback,
         mode: "fallback",
