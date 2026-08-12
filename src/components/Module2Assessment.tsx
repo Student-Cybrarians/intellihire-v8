@@ -4,10 +4,33 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 const sections = ["quantitative", "logical", "verbal", "domain", "coding"] as const;
 
+type AssessmentQuestion = {
+  id: string;
+  prompt: string;
+  options: string[];
+  section: string;
+};
+
+type AssessmentAttempt = {
+  id: string;
+  answered: number;
+  ability: number;
+  currentQuestion?: AssessmentQuestion;
+};
+
+type AssessmentResult = {
+  overallScore: number;
+  accuracy: number;
+  speedScore: number;
+  sectionScores: Record<string, number>;
+  strengths: string[];
+  recommendations: string[];
+};
+
 export function Module2Assessment() {
   const [role, setRole] = useState("Software Engineer");
-  const [attempt, setAttempt] = useState<any>(null);
-  const [result, setResult] = useState<any>(null);
+  const [attempt, setAttempt] = useState<AssessmentAttempt | null>(null);
+  const [result, setResult] = useState<AssessmentResult | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [startedAt, setStartedAt] = useState<number>(Date.now());
   const [busy, setBusy] = useState(false);
@@ -20,9 +43,10 @@ export function Module2Assessment() {
       const response = await fetch("/api/assessments/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ role }),
       });
-      const data = await response.json();
+      const data = (await response.json()) as AssessmentAttempt & { error?: { message?: string } };
       if (!response.ok) throw new Error(data.error?.message ?? "Unable to start assessment");
       setAttempt(data);
       setSelected(null);
@@ -41,7 +65,7 @@ export function Module2Assessment() {
 
   const answered = attempt?.answered ?? 0;
   const progress = Math.min(100, Math.round((answered / 8) * 100));
-  const currentSection = attempt?.currentQuestion?.section as string | undefined;
+  const currentSection = attempt?.currentQuestion?.section;
 
   const sectionLabel = useMemo(
     () => (currentSection ? currentSection.replace(/^./, (x) => x.toUpperCase()) : "Adaptive"),
@@ -56,6 +80,7 @@ export function Module2Assessment() {
       const response = await fetch("/api/assessments/answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           attemptId: attempt.id,
           questionId: attempt.currentQuestion.id,
@@ -63,7 +88,7 @@ export function Module2Assessment() {
           responseMs: Date.now() - startedAt,
         }),
       });
-      const data = await response.json();
+      const data = (await response.json()) as { state: AssessmentAttempt; error?: { message?: string } };
       if (!response.ok) throw new Error(data.error?.message ?? "Unable to submit answer");
       setAttempt(data.state);
       setSelected(null);
@@ -72,9 +97,10 @@ export function Module2Assessment() {
         const done = await fetch("/api/assessments/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ attemptId: attempt.id }),
         });
-        const finalData = await done.json();
+        const finalData = (await done.json()) as AssessmentResult & { error?: { message?: string } };
         if (!done.ok) throw new Error(finalData.error?.message ?? "Unable to complete assessment");
         setResult(finalData);
       }
@@ -116,8 +142,8 @@ export function Module2Assessment() {
               </div>
               <h2 style={{ fontSize: "1.45rem", lineHeight: 1.45, marginTop: 28 }}>{attempt.currentQuestion.prompt}</h2>
               <div style={{ display: "grid", gap: 10, marginTop: 22 }}>
-                {attempt.currentQuestion.options.map((option: string, index: number) => (
-                  <button key={option} type="button" onClick={() => setSelected(index)} style={{ textAlign: "left", padding: "1rem", borderRadius: 12, border: `1px solid ${selected === index ? "var(--ih-accent)" : "var(--ih-surface-border)"}`, background: selected === index ? "rgba(74,156,255,.12)" : "transparent", color: "inherit", cursor: "pointer" }}>
+                {attempt.currentQuestion.options.map((option, index) => (
+                  <button key={`${attempt.currentQuestion?.id}-${index}`} type="button" onClick={() => setSelected(index)} style={{ textAlign: "left", padding: "1rem", borderRadius: 12, border: `1px solid ${selected === index ? "var(--ih-accent)" : "var(--ih-surface-border)"}`, background: selected === index ? "rgba(74,156,255,.12)" : "transparent", color: "inherit", cursor: "pointer" }}>
                     <strong>{String.fromCharCode(65 + index)}.</strong> {option}
                   </button>
                 ))}
@@ -147,13 +173,13 @@ export function Module2Assessment() {
             <div style={{ background: "var(--ih-surface)", border: "1px solid var(--ih-surface-border)", borderRadius: 18, padding: 26 }}>
               <div style={{ font: "600 .7rem var(--ih-font-mono)", color: "var(--ih-accent)" }}>ASSESSMENT REPORT</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginTop: 16 }}>
-                {[['Overall', result.overallScore], ['Accuracy', result.accuracy], ['Speed', result.speedScore]].map(([label, value]) => <div key={label as string} style={{ padding: 18, borderRadius: 12, background: "rgba(255,255,255,.04)" }}><div style={{ color: "var(--ih-text-muted)", fontSize: 12 }}>{label}</div><div style={{ fontSize: "2.2rem", fontWeight: 800, marginTop: 6 }}>{value}<span style={{ fontSize: 14, color: "var(--ih-text-muted)" }}>/100</span></div></div>)}
+                {[["Overall", result.overallScore], ["Accuracy", result.accuracy], ["Speed", result.speedScore]].map(([label, value]) => <div key={label as string} style={{ padding: 18, borderRadius: 12, background: "rgba(255,255,255,.04)" }}><div style={{ color: "var(--ih-text-muted)", fontSize: 12 }}>{label}</div><div style={{ fontSize: "2.2rem", fontWeight: 800, marginTop: 6 }}>{value}<span style={{ fontSize: 14, color: "var(--ih-text-muted)" }}>/100</span></div></div>)}
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 18 }}>
               <Panel title="Section scores"><pre style={{ margin: 0, whiteSpace: "pre-wrap", color: "var(--ih-text-muted)" }}>{JSON.stringify(result.sectionScores, null, 2)}</pre></Panel>
-              <Panel title="Strengths"><ul>{result.strengths.map((x: string) => <li key={x}>{x}</li>)}</ul></Panel>
-              <Panel title="Next steps"><ul>{result.recommendations.map((x: string) => <li key={x}>{x}</li>)}</ul></Panel>
+              <Panel title="Strengths"><ul>{result.strengths.map((x) => <li key={x}>{x}</li>)}</ul></Panel>
+              <Panel title="Next steps"><ul>{result.recommendations.map((x) => <li key={x}>{x}</li>)}</ul></Panel>
             </div>
           </section>
         ) : null}
