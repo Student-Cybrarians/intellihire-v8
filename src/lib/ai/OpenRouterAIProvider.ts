@@ -11,8 +11,9 @@ import { logger, redactSecrets } from "@/lib/logger";
 
 const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
-const DEFAULT_TIMEOUT_MS = 20_000;
-const MAX_RETRIES = 3;
+// Interactive Module 1 requests must not sit behind a long upstream retry loop.
+const DEFAULT_TIMEOUT_MS = 8_000;
+const MAX_RETRIES = 1;
 
 type ContentPart = { type?: string; text?: string };
 type MessageContent = string | ContentPart[];
@@ -63,11 +64,7 @@ export class OpenRouterAIProvider implements AIProvider {
   }): Promise<AIResponse> {
     const apiKey = getApiKey();
     if (!apiKey) {
-      throw new AIServiceError(
-        "Missing OPENROUTER_API_KEY",
-        "MISSING_CREDENTIALS",
-        false,
-      );
+      throw new AIServiceError("Missing OPENROUTER_API_KEY", "MISSING_CREDENTIALS", false);
     }
 
     const model = getModel();
@@ -95,6 +92,7 @@ export class OpenRouterAIProvider implements AIProvider {
           },
           body: JSON.stringify(body),
           signal: controller.signal,
+          cache: "no-store",
         });
 
         clearTimeout(timeout);
@@ -109,7 +107,7 @@ export class OpenRouterAIProvider implements AIProvider {
             retryable,
           );
           if (retryable && attempt < MAX_RETRIES) {
-            await sleep(2 ** attempt * 250);
+            await sleep(300);
             continue;
           }
           throw lastError;
@@ -117,13 +115,8 @@ export class OpenRouterAIProvider implements AIProvider {
 
         const data = (await response.json()) as ChatCompletionResponse;
         const text = extractText(data.choices?.[0]?.message?.content);
-
         if (!text) {
-          throw new AIServiceError(
-            "OpenRouter response did not contain expected content",
-            "INVALID_RESPONSE",
-            false,
-          );
+          throw new AIServiceError("OpenRouter response did not contain expected content", "INVALID_RESPONSE", false);
         }
 
         return {
@@ -141,7 +134,7 @@ export class OpenRouterAIProvider implements AIProvider {
         if (err instanceof AIServiceError) {
           lastError = err;
         } else if ((err as Error).name === "AbortError") {
-          lastError = new AIServiceError("OpenRouter request timed out", "TIMEOUT", true);
+          lastError = new AIServiceError("OpenRouter request timed out after 8 seconds", "TIMEOUT", true);
         } else {
           lastError = new AIServiceError(
             `OpenRouter request failed: ${(err as Error).message}`,
@@ -155,7 +148,7 @@ export class OpenRouterAIProvider implements AIProvider {
             redactSecrets({ attempt, code: lastError.code, correlationId: params.correlationId }),
             "openrouter_request_retry",
           );
-          await sleep(2 ** attempt * 250);
+          await sleep(300);
           continue;
         }
 
@@ -214,8 +207,6 @@ export class OpenRouterAIProvider implements AIProvider {
 
   async healthCheck(): Promise<{ healthy: boolean; details?: string }> {
     const apiKey = getApiKey();
-    return apiKey
-      ? { healthy: true, details: `Configured for ${getModel()}` }
-      : { healthy: false, details: "Missing OPENROUTER_API_KEY" };
+    return apiKey ? { healthy: true, details: `Configured for ${getModel()}` } : { healthy: false, details: "Missing OPENROUTER_API_KEY" };
   }
 }
