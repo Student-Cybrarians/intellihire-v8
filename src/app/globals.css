@@ -52,10 +52,58 @@ button {
   font-family: inherit;
 }
 
+.ih-home-logo {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 196px;
+  height: 68px;
+  padding: 7px 12px;
+  overflow: hidden;
+  border: 1px solid rgba(240, 195, 142, 0.24);
+  border-radius: 14px;
+  background: rgba(11, 18, 16, 0.86);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.ih-home-logo:hover {
+  transform: translateY(-1px);
+  border-color: rgba(240, 195, 142, 0.62);
+  background: rgba(16, 26, 23, 0.96);
+}
+
+.ih-home-logo:active {
+  transform: translateY(0);
+}
+
+.ih-home-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 :focus-visible {
   outline: 2px solid var(--ih-focus-ring);
   outline-offset: 2px;
   border-radius: var(--ih-radius-sm);
+}
+
+@media (max-width: 640px) {
+  .ih-home-logo {
+    top: 10px;
+    left: 10px;
+    width: 142px;
+    height: 50px;
+    padding: 5px 8px;
+    border-radius: 11px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
