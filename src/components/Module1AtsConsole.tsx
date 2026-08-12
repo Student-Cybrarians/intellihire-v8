@@ -5,8 +5,15 @@ import type { AtsScreeningResult } from "@/lib/modules/ats/types";
 import "./Module1AtsConsole.css";
 
 const steps = ["Resume", "Job Description", "Target Role", "Parse", "Match", "Score", "Gaps", "Recommendations"];
+const CLIENT_TIMEOUT_MS = 14_000;
 
-type ScreeningResponse = { result?: AtsScreeningResult; message?: string; mode?: "ai" | "fallback"; warning?: string };
+type ScreeningResponse = {
+  result?: AtsScreeningResult;
+  message?: string;
+  error?: string;
+  mode?: "ai" | "fallback";
+  warning?: string;
+};
 
 export function Module1AtsConsole() {
   const [resumeText, setResumeText] = useState("");
@@ -29,34 +36,63 @@ export function Module1AtsConsole() {
     setWarning(null);
     setResult(null);
     setMode(null);
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
     try {
       const response = await fetch("/api/modules/ats/screen", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ resumeText, jobDescription, company, targetRole }),
+        signal: controller.signal,
       });
+
       const payload = (await response.json().catch(() => ({}))) as ScreeningResponse;
-      if (!response.ok || !payload.result) throw new Error(payload.message || `ATS screening failed (${response.status}).`);
+      if (!response.ok || !payload.result) {
+        if (response.status === 401) {
+          throw new Error("Your session has expired. Please sign in again and reopen Module 1.");
+        }
+        throw new Error(payload.message || payload.error || `ATS screening failed (${response.status}).`);
+      }
+
       setResult(payload.result);
       setMode(payload.mode ?? "ai");
       setWarning(payload.warning ?? null);
       requestAnimationFrame(() => document.querySelector(".m1-results")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ATS screening failed.");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("The screening request took too long. Please try again; the server has a deterministic ATS fallback for AI outages.");
+      } else {
+        setError(err instanceof Error ? err.message : "ATS screening failed.");
+      }
     } finally {
+      window.clearTimeout(timeout);
       setBusy(false);
     }
   }
 
   function downloadReport() {
     if (!result) return;
-    const report = { product: "IntelliHire", module: "Module 1 — AI Recruitment Screening & ATS Engine", generatedAt: new Date().toISOString(), company: company || null, targetRole: targetRole || null, mode, result };
+    const report = {
+      product: "IntelliHire",
+      module: "Module 1 — AI Recruitment Screening & ATS Engine",
+      generatedAt: new Date().toISOString(),
+      company: company || null,
+      targetRole: targetRole || null,
+      mode,
+      result,
+    };
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "intellihire-module-1-ats-report.json";
+    document.body.appendChild(anchor);
     anchor.click();
+    anchor.remove();
     URL.revokeObjectURL(url);
   }
 
