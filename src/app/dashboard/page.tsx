@@ -15,26 +15,10 @@ export default async function DashboardPage() {
       <p style={{ color: "var(--ih-text-muted)", maxWidth: 760 }}>Your IntelliHire training workspace. Work through the modules in order so every result can feed the next stage.</p>
 
       <div style={{ display: "grid", gap: "1.25rem", maxWidth: 900 }}>
-        <section style={card}>
-          <p style={{ margin: 0, font: "500 .72rem var(--ih-font-mono)", letterSpacing: ".12em", color: "var(--ih-accent)" }}>MODULE 01 / ATS</p>
-          <h2 style={{ margin: ".4rem 0" }}>AI Resume Screening</h2>
-          <p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Compare your resume with a target role and generate evidence-based ATS compatibility, strengths, gaps, and recommendations.</p>
-          <Link href="/dashboard/module-1" style={link}>Open Module 1</Link>
-        </section>
-
-        <section style={card}>
-          <p style={{ margin: 0, font: "500 .72rem var(--ih-font-mono)", letterSpacing: ".12em", color: "var(--ih-accent)" }}>MODULE 02 / ADAPTIVE ASSESSMENT</p>
-          <h2 style={{ margin: ".4rem 0" }}>Adaptive AI Assessment</h2>
-          <p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Answer calibrated questions across aptitude, reasoning, verbal, domain, and coding sections. Difficulty updates as your ability estimate changes.</p>
-          <Link href="/dashboard/module-2" style={link}>Open Module 2</Link>
-        </section>
-
-        <section style={card}>
-          <p style={{ margin: 0, font: "500 .72rem var(--ih-font-mono)", letterSpacing: ".12em", color: "var(--ih-accent)" }}>MODULE 03 / TECHNICAL INTERVIEW</p>
-          <h2 style={{ margin: ".4rem 0" }}>AI Technical Interview</h2>
-          <p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Practice technical reasoning, DSA, system design, and project trade-offs. Responses are evaluated and saved to your interview history.</p>
-          <Link href="/dashboard/module-3" style={link}>Open Module 3</Link>
-        </section>
+        <section style={card}><p style={{ margin: 0, font: "500 .72rem var(--ih-font-mono)", letterSpacing: ".12em", color: "var(--ih-accent)" }}>MODULE 01 / ATS</p><h2 style={{ margin: ".4rem 0" }}>AI Resume Screening</h2><p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Compare your resume with a target role and generate evidence-based ATS compatibility, strengths, gaps, and recommendations.</p><Link href="/dashboard/module-1" style={link}>Open Module 1</Link></section>
+        <section style={card}><p style={{ margin: 0, font: "500 .72rem var(--ih-font-mono)", letterSpacing: ".12em", color: "var(--ih-accent)" }}>MODULE 02 / ADAPTIVE ASSESSMENT</p><h2 style={{ margin: ".4rem 0" }}>Adaptive AI Assessment</h2><p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Answer calibrated questions across aptitude, reasoning, verbal, domain, and coding sections. Difficulty updates as your ability estimate changes.</p><Link href="/dashboard/module-2" style={link}>Open Module 2</Link></section>
+        <section style={card}><p style={{ margin: 0, font: "500 .72rem var(--ih-font-mono)", letterSpacing: ".12em", color: "var(--ih-accent)" }}>MODULE 03 / TECHNICAL INTERVIEW</p><h2 style={{ margin: ".4rem 0" }}>AI Technical Interview</h2><p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Practice technical reasoning, DSA, system design, and project trade-offs. Responses are evaluated and saved to your interview history.</p><Link href="/dashboard/module-3" style={link}>Open Module 3</Link></section>
+        <section style={card}><p style={{ margin: 0, font: "500 .72rem var(--ih-font-mono)", letterSpacing: ".12em", color: "var(--ih-accent)" }}>MODULE 04 / HR INTERVIEW</p><h2 style={{ margin: ".4rem 0" }}>Real-Time HR Interview</h2><p style={{ color: "var(--ih-text-muted)", lineHeight: 1.6 }}>Practice behavioral, teamwork, ownership, and motivation questions with optional speech-to-text and evidence-based AI coaching after every answer.</p><Link href="/dashboard/module-4" style={link}>Open Module 4</Link></section>
       </div>
 
       <form action="/api/auth/logout" method="post" style={{ marginTop: "2rem" }}><button type="submit">Sign out</button></form>
