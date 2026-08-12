@@ -28,10 +28,12 @@ export function Module2Assessment() {
   };
 
   useEffect(() => {
-    void begin();
-    // This effect intentionally starts the persisted assessment request on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
-  }, []);
+    // Defer the initial network action until after the mount commit. This avoids
+    // a synchronous state update from the effect while still starting the
+    // persisted assessment automatically for the user.
+    const timer = window.setTimeout(() => { void begin(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const answered = attempt?.answered ?? 0;
   const progress = Math.min(100, Math.round((answered / 8) * 100));
