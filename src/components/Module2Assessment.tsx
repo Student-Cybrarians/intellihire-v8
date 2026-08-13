@@ -172,7 +172,7 @@ export function Module2Assessment() {
               <Panel title="Next steps"><ul>{result.recommendations.map((x) => <li key={x}>{x}</li>)}</ul></Panel>
             </div>
             {result.weaknesses?.length ? <Panel title="Focus areas"><ul>{result.weaknesses.map((x) => <li key={x}>{x}</li>)}</ul></Panel> : null}
-            <button type="button" onClick={() => { setAttempt(null); setResult(null); setFeedback(null); setError(null); setSelected(null); }} style={{ justifySelf: "start", padding: ".75rem 1rem", borderRadius: 10, border: "1px solid var(--ih-surface-border)", background: "var(--ih-surface)", color: "inherit", cursor: "pointer" }}>Start another assessment</button>
+            <button type="button" onClick={() => { setAttempt(null); setResult(null); setFeedback(null); setError(null); setSelected(null); void begin(); }} style={{ justifySelf: "start", padding: ".75rem 1rem", borderRadius: 10, border: "1px solid var(--ih-surface-border)", background: "var(--ih-surface)", color: "inherit", cursor: "pointer" }}>Start another assessment</button>
           </section>
         ) : null}
       </div>
