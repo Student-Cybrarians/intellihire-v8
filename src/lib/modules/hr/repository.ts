@@ -36,6 +36,7 @@ async function ensureSchema() {
         started_at timestamptz NOT NULL DEFAULT now(), completed_at timestamptz
       );
       CREATE INDEX IF NOT EXISTS hr_interviews_user_status_idx ON hr_interviews(user_id, status, started_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS hr_interviews_one_active_per_user_idx ON hr_interviews(user_id) WHERE status='IN_PROGRESS';
       CREATE TABLE IF NOT EXISTS hr_questions (
         id uuid PRIMARY KEY,
         interview_id uuid NOT NULL REFERENCES hr_interviews(id) ON DELETE CASCADE,
@@ -68,7 +69,7 @@ function clampScore(value: unknown): number {
   return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
 }
 
-function parseEvaluation(raw: string, answer: string): HREvaluation {
+function parseEvaluation(raw: string): Pick<HREvaluation, "strengths" | "improvements"> & Partial<Pick<HREvaluation, "communication" | "behavioral" | "relevance" | "structure">> {
   const cleaned = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
@@ -82,7 +83,8 @@ function parseEvaluation(raw: string, answer: string): HREvaluation {
   };
 }
 
-function deterministicEvaluation(answer: string): HREvaluation {
+/** Stable scoring from observable answer content only. AI never controls numeric scores. */
+export function deterministicEvaluation(answer: string): HREvaluation {
   const text = answer.trim();
   const words = text.split(/\s+/).filter(Boolean).length;
   const lower = text.toLowerCase();
@@ -99,6 +101,7 @@ function deterministicEvaluation(answer: string): HREvaluation {
 }
 
 async function evaluateAnswer(userId: string, question: string, answer: string, role: string | null, company: string | null): Promise<HREvaluation> {
+  const deterministic = deterministicEvaluation(answer);
   const prompt = `Evaluate an HR interview coaching answer. This is training feedback, not a hiring decision. Never infer protected characteristics, personality diagnoses, health, or other sensitive traits. Return ONLY JSON with numeric 0-100 fields communication, behavioral, relevance, structure and string arrays strengths, improvements. Be evidence-based. ROLE: ${role ?? "unspecified"}. COMPANY: ${company ?? "unspecified"}. QUESTION: ${question}\nANSWER: ${answer.slice(0, 10000)}`;
   try {
     const response = await aiService.generate(userId, {
@@ -106,9 +109,10 @@ async function evaluateAnswer(userId: string, question: string, answer: string, 
       systemPrompt: "You are IntelliHire's HR interview coach. Evaluate only the observable content of the answer and give actionable coaching.",
       maxTokens: 600, temperature: 0.2,
     });
-    return parseEvaluation(response.text, answer);
+    const coaching = parseEvaluation(response.text);
+    return { ...deterministic, strengths: coaching.strengths, improvements: coaching.improvements };
   } catch {
-    return deterministicEvaluation(answer);
+    return deterministic;
   }
 }
 
@@ -130,6 +134,10 @@ export async function startInterview(userId: string, role: string | null, compan
     return getInterview(userId, id);
   } catch (error) {
     await client.query("ROLLBACK");
+    if ((error as { code?: string }).code === "23505") {
+      const existing = await pgPool.query(`SELECT id FROM hr_interviews WHERE user_id=$1 AND status='IN_PROGRESS' ORDER BY started_at DESC LIMIT 1`, [userId]);
+      if (existing.rows[0]) return getInterview(userId, existing.rows[0].id);
+    }
     throw error;
   } finally { client.release(); }
 }
