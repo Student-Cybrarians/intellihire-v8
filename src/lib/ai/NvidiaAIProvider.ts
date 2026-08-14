@@ -10,8 +10,9 @@ import { AIServiceError } from "./types";
 import { logger, redactSecrets } from "@/lib/logger";
 
 const DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-const DEFAULT_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
-const DEFAULT_TIMEOUT_MS = 12_000;
+// Current NVIDIA-hosted model suitable for fast text reasoning/analysis.
+const DEFAULT_MODEL = "nvidia/nemotron-3.5-nano-30b-a3b";
+const DEFAULT_TIMEOUT_MS = 9_500;
 const MAX_RETRIES = 1;
 
 type ContentPart =
@@ -72,6 +73,7 @@ export class NvidiaAIProvider implements AIProvider {
       messages: params.messages,
       max_tokens: params.maxTokens ?? 1024,
       temperature: params.temperature ?? 0.2,
+      stream: false,
     };
 
     let lastError: AIServiceError | null = null;
@@ -81,7 +83,11 @@ export class NvidiaAIProvider implements AIProvider {
       try {
         const response = await fetch(this.endpoint(), {
           method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(body),
           signal: controller.signal,
           cache: "no-store",
@@ -91,7 +97,9 @@ export class NvidiaAIProvider implements AIProvider {
         const data = (await response.json().catch(() => null)) as ChatResponse | null;
         if (!response.ok) {
           lastError = new AIServiceError(
-            data?.error?.message ? `NVIDIA API error: ${data.error.message}` : `NVIDIA API responded with status ${response.status}`,
+            data?.error?.message
+              ? `NVIDIA API error: ${data.error.message}`
+              : `NVIDIA API responded with status ${response.status}`,
             response.status === 429 ? "RATE_LIMITED" : "UPSTREAM_ERROR",
             retryable(response.status),
           );
@@ -103,7 +111,13 @@ export class NvidiaAIProvider implements AIProvider {
         }
 
         const text = textFrom(data?.choices?.[0]?.message?.content);
-        if (!text) throw new AIServiceError("NVIDIA response did not contain expected content", "INVALID_RESPONSE", false);
+        if (!text) {
+          throw new AIServiceError(
+            "NVIDIA response did not contain expected content",
+            "INVALID_RESPONSE",
+            false,
+          );
+        }
 
         return {
           text,
@@ -121,14 +135,24 @@ export class NvidiaAIProvider implements AIProvider {
         } else if ((error as Error).name === "AbortError") {
           lastError = new AIServiceError("NVIDIA request timed out", "TIMEOUT", true);
         } else {
-          lastError = new AIServiceError(`NVIDIA request failed: ${(error as Error).message}`, "UPSTREAM_ERROR", true);
+          lastError = new AIServiceError(
+            `NVIDIA request failed: ${(error as Error).message}`,
+            "UPSTREAM_ERROR",
+            true,
+          );
         }
         if (lastError.retryable && attempt < MAX_RETRIES) {
-          logger.warn(redactSecrets({ attempt, code: lastError.code, correlationId: params.correlationId }), "nvidia_request_retry");
+          logger.warn(
+            redactSecrets({ attempt, code: lastError.code, correlationId: params.correlationId }),
+            "nvidia_request_retry",
+          );
           await delay(400);
           continue;
         }
-        logger.error(redactSecrets({ code: lastError.code, correlationId: params.correlationId }), "nvidia_request_failed");
+        logger.error(
+          redactSecrets({ code: lastError.code, correlationId: params.correlationId }),
+          "nvidia_request_failed",
+        );
         throw lastError;
       }
     }
