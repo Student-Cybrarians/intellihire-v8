@@ -2,7 +2,9 @@ name: Module 1 Verification
 
 on:
   push:
-    branches: [master-branch]
+    branches:
+      - master-branch
+      - 'codex/**'
   workflow_dispatch:
 
 permissions:
@@ -85,4 +87,6 @@ jobs:
           test "$parse_status" = "401"
           screen_status=$(curl -sS -o /tmp/screen.json -w "%{http_code}" -X POST http://127.0.0.1:3000/api/modules/ats/screen -H "Content-Type: application/json" -d '{"resumeText":"test"}')
           test "$screen_status" = "401"
+          ai_status=$(curl -sS -o /tmp/ai-status.json -w "%{http_code}" http://127.0.0.1:3000/api/modules/ats/ai-status)
+          test "$ai_status" = "401"
           kill "$(cat /tmp/intellihire-next.pid)" || true
