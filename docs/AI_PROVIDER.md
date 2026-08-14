@@ -1,52 +1,87 @@
-# OpenRouter AI Provider Architecture
+# IntelliHire AI Provider Architecture
 
-## Layers
+Module 1 uses a real hosted AI provider through the shared `aiService` abstraction. The module never reads provider API keys directly.
+
+## Flow
 
 ```text
-future module (ATS, assessments, interviews, ...)
-        │  aiService.generate/analyzeText(userId, { capability, prompt })
+Module 1 ATS route
+        │
+        │ aiService.analyzeText(userId, { capability: "reasoning", ... })
         ▼
-src/lib/ai/aiService.ts       — budget/rate-limit enforcement, correlation IDs, error logging
+src/lib/ai/aiService.ts
+        │
+        ├── per-user AI budget / rate limit
+        ├── correlation ID
+        └── provider selection
+        ▼
+NVIDIAAIProvider or OpenRouterAIProvider
         │
         ▼
-src/lib/ai/types.ts           — AIProvider interface (generate/analyzeText/analyzeVision/healthCheck)
+Hosted chat-completions API
         │
         ▼
-src/lib/ai/OpenRouterAIProvider.ts — OpenRouter HTTP calls, timeout, retry, response validation
+validated JSON result
+        │
+        ▼
+Module 1 ATS report
 ```
 
-Modules never read the OpenRouter API key directly. They call `aiService`, which applies the per-user capability budget and passes the request to the provider abstraction.
+## Primary provider
 
-## Configuration
+When `NVIDIA_API_KEY` is configured, IntelliHire uses NVIDIA's hosted NIM endpoint:
 
-| Setting | Environment variable | Default |
-| --- | --- | --- |
-| API key | `OPENROUTER_API_KEY` | none; AI is unavailable without it |
-| Model | `OPENROUTER_MODEL` | `openai/gpt-4o-mini` |
-| API endpoint | internal provider constant | `https://openrouter.ai/api/v1/chat/completions` |
+`https://integrate.api.nvidia.com/v1/chat/completions`
 
-## Adding a module
+The default model is:
 
-```ts
-import { aiService } from "@/lib/ai/aiService";
+`nvidia/nemotron-3.5-nano-30b-a3b`
 
-const result = await aiService.analyzeText(user.id, {
-  capability: "reasoning",
-  systemPrompt: "You are an ATS resume screener...",
-  prompt: resumeText,
-});
-```
+`NVIDIA_MODEL` can override the default without changing application code.
 
-A module does not need to know the model name or API-key value. Provider-specific behavior remains inside the provider implementation.
+## OpenRouter fallback provider
+
+If NVIDIA is not configured, `OPENROUTER_API_KEY` enables OpenRouter. The model is controlled by `OPENROUTER_MODEL`.
+
+## Module 1 behavior
+
+1. The authenticated candidate submits a resume and job description.
+2. The server validates input size and authentication.
+3. The deterministic ATS engine calculates a local baseline.
+4. If a real AI provider is configured, the server calls `aiService.analyzeText()`.
+5. The model is instructed to treat resume/JD content as untrusted data and return only the Module 1 JSON schema.
+6. The server parses and validates the model response with Zod.
+7. Only validated AI output is returned as `mode: "ai"`.
+8. If no provider is configured or the provider fails, the deterministic ATS result is returned transparently as `mode: "fallback"`.
+
+The fallback does not pretend to be AI. The frontend explicitly reports when AI enrichment was unavailable.
 
 ## Resilience
 
-- Provider timeout: 8 seconds per upstream attempt.
-- Retry: one retry for `429` and `5xx`/retryable transport failures.
+- NVIDIA upstream timeout: 9.5 seconds per attempt.
+- NVIDIA retry: one retry for `429` and `5xx`/retryable transport failures.
+- Module 1 application timeout: 11 seconds for the AI attempt.
 - AI budget: 20 requests/minute per requester and capability through the shared rate limiter.
-- Secrets: the API key is only placed in the outbound `Authorization` header and is redacted from logs.
-- Module 1 has an additional application-level deterministic ATS fallback so an OpenRouter outage does not make resume screening unusable.
+- API keys are server-side only and redacted from logs.
+- AI output is schema-validated before being accepted.
 
-## Health check
+## AI status
 
-`healthCheck()` checks whether `OPENROUTER_API_KEY` is configured. It deliberately does not make a billed model request on every application health probe.
+Authenticated users can query:
+
+`GET /api/modules/ats/ai-status`
+
+This endpoint does not make a billed inference request. It reports whether a provider is configured and which provider/model configuration is active.
+
+## Configuration
+
+```env
+NVIDIA_API_KEY=
+NVIDIA_API_BASE_URL=https://integrate.api.nvidia.com/v1/chat/completions
+NVIDIA_MODEL=nvidia/nemotron-3.5-nano-30b-a3b
+
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4o-mini
+```
+
+Never expose these keys through `NEXT_PUBLIC_*` variables or commit them to Git.
