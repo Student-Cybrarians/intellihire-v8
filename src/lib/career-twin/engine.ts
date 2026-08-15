@@ -43,18 +43,15 @@ function normalize(value: string): string {
 }
 
 function hasSkill(text: string, skill: string): boolean {
-  const normalized = normalize(text);
-  return normalized.includes(normalize(skill));
+  return normalize(text).includes(normalize(skill));
 }
 
 function extractTokens(jobDescription: string): string[] {
-  const tokens = normalize(jobDescription)
-    .split(" ")
-    .filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
+  const tokens = normalize(jobDescription).split(" ").filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
   return [...new Set(tokens)];
 }
 
-function deterministicTwin(resumeText: string, jobDescription: string, targetRole: string | null, targetCompany: string | null): CareerTwin {
+export function deterministicCareerTwin(resumeText: string, jobDescription: string, targetRole: string | null, targetCompany: string | null): CareerTwin {
   const matchedKnown = KNOWN_SKILLS.filter((skill) => hasSkill(resumeText, skill) && hasSkill(jobDescription, skill));
   const missingKnown = KNOWN_SKILLS.filter((skill) => hasSkill(jobDescription, skill) && !hasSkill(resumeText, skill));
   const transferable = KNOWN_SKILLS.filter((skill) => hasSkill(resumeText, skill) && !hasSkill(jobDescription, skill)).slice(0, 8);
@@ -68,9 +65,7 @@ function deterministicTwin(resumeText: string, jobDescription: string, targetRol
     ...transferable.map((name) => ({ name, state: "transferable" as const, evidence: ["Found in the supplied resume but not explicitly required by the target job description."], relevance: 60 })),
   ].slice(0, 32);
 
-  if (graph.length === 0) {
-    graph.push({ name: targetRole || "target role", state: "gap", evidence: ["No reliable skill overlap was found from the supplied text."], relevance: 50 });
-  }
+  if (graph.length === 0) graph.push({ name: targetRole || "target role", state: "gap", evidence: ["No reliable skill overlap was found from the supplied text."], relevance: 50 });
 
   const keywordCoverage = jdTokens.length ? Math.round((tokenMatches.length / jdTokens.length) * 100) : 0;
   const confidence = Math.min(95, Math.max(35, 45 + Math.min(35, Math.round(resumeText.length / 600)) + Math.min(15, graph.length)));
@@ -98,14 +93,11 @@ function parseAiResponse(text: string): CareerTwin {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   const jsonText = start >= 0 && end > start ? raw.slice(start, end + 1) : raw;
-  const parsed = JSON.parse(jsonText) as unknown;
-  return careerTwinSchema.parse(parsed);
+  return careerTwinSchema.parse(JSON.parse(jsonText) as unknown);
 }
 
 export function fingerprintCareerTwinInput(resumeText: string, jobDescription: string, targetRole: string | null, targetCompany: string | null): string {
-  return createHash("sha256")
-    .update(JSON.stringify({ resumeText: resumeText.trim(), jobDescription: jobDescription.trim(), targetRole, targetCompany }))
-    .digest("hex");
+  return createHash("sha256").update(JSON.stringify({ resumeText: resumeText.trim(), jobDescription: jobDescription.trim(), targetRole, targetCompany })).digest("hex");
 }
 
 export async function buildCareerTwin(params: {
@@ -115,10 +107,8 @@ export async function buildCareerTwin(params: {
   targetRole: string | null;
   targetCompany: string | null;
 }): Promise<{ twin: CareerTwin; mode: "ai" | "fallback"; model?: string; correlationId?: string }> {
-  const fallback = deterministicTwin(params.resumeText, params.jobDescription, params.targetRole, params.targetCompany);
-  if (!process.env.NVIDIA_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) {
-    return { twin: fallback, mode: "fallback" };
-  }
+  const fallback = deterministicCareerTwin(params.resumeText, params.jobDescription, params.targetRole, params.targetCompany);
+  if (!process.env.NVIDIA_API_KEY?.trim() && !process.env.OPENROUTER_API_KEY?.trim()) return { twin: fallback, mode: "fallback" };
 
   try {
     const response = await aiService.analyzeText(params.requesterId, {
