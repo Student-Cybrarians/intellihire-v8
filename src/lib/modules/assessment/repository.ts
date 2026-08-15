@@ -2,8 +2,18 @@ import { pgPool } from "@/db/client";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import type { AssessmentQuestion, AssessmentResult, AssessmentSection, AssessmentState } from "./types";
-import { chooseQuestion, updateAbility, abilityToScore } from "./engine";
+import { chooseAdaptiveQuestion, updateAbility, abilityToScore } from "./engine";
 import { aiService } from "@/lib/ai/aiService";
+
+const SECTIONS: AssessmentSection[] = ["quantitative", "logical", "verbal", "domain", "coding"];
+const DEFAULT_SECTION_ABILITIES: Record<AssessmentSection, number> = {
+  quantitative: 0,
+  logical: 0,
+  verbal: 0,
+  domain: 0,
+  coding: 0,
+};
+const MAX_QUESTIONS = 8;
 
 const SEED_QUESTIONS: Array<Omit<AssessmentQuestion, "id"> & { correctIndex: number; explanation: string }> = [
   { section: "quantitative", prompt: "A and B have ages in the ratio 3:5. Five years ago the ratio was 2:3. What is A's current age?", options: ["15", "20", "25", "30"], correctIndex: 1, difficulty: 0, discrimination: 1.1, explanation: "Solve 3x/5x with the five-year offset; A is 20." },
@@ -25,6 +35,14 @@ const AI_FEEDBACK_SCHEMA = z.object({
 });
 
 let schemaReady: Promise<void> | null = null;
+
+function normalizeSectionAbilities(value: unknown): Record<AssessmentSection, number> {
+  const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return Object.fromEntries(SECTIONS.map((section) => [
+    section,
+    Math.max(-3, Math.min(3, Number.isFinite(Number(source[section])) ? Number(source[section]) : 0)),
+  ])) as Record<AssessmentSection, number>;
+}
 
 async function ensureSchema(): Promise<void> {
   if (!schemaReady) {
@@ -48,10 +66,12 @@ async function ensureSchema(): Promise<void> {
           role varchar(255),
           status varchar(24) NOT NULL DEFAULT 'IN_PROGRESS',
           ability real NOT NULL DEFAULT 0,
+          section_abilities jsonb NOT NULL DEFAULT '{"quantitative":0,"logical":0,"verbal":0,"domain":0,"coding":0}'::jsonb,
           question_count integer NOT NULL DEFAULT 0,
           started_at timestamptz NOT NULL DEFAULT now(),
           completed_at timestamptz
         );
+        ALTER TABLE assessment_attempts ADD COLUMN IF NOT EXISTS section_abilities jsonb NOT NULL DEFAULT '{"quantitative":0,"logical":0,"verbal":0,"domain":0,"coding":0}'::jsonb;
         CREATE INDEX IF NOT EXISTS assessment_attempts_user_idx ON assessment_attempts(user_id);
         CREATE TABLE IF NOT EXISTS assessment_responses (
           id uuid PRIMARY KEY,
@@ -95,7 +115,7 @@ async function ensureSchema(): Promise<void> {
 export async function startAttempt(userId: string, role: string | null): Promise<AssessmentState> {
   await ensureSchema();
   const existing = await pgPool.query(
-    `SELECT id, status, role, ability, question_count FROM assessment_attempts
+    `SELECT id FROM assessment_attempts
      WHERE user_id = $1 AND status = 'IN_PROGRESS' ORDER BY started_at DESC LIMIT 1`,
     [userId],
   );
@@ -103,8 +123,8 @@ export async function startAttempt(userId: string, role: string | null): Promise
 
   const id = randomUUID();
   await pgPool.query(
-    `INSERT INTO assessment_attempts (id, user_id, role, status, ability, question_count) VALUES ($1, $2, $3, 'IN_PROGRESS', 0, 0)`,
-    [id, userId, role],
+    `INSERT INTO assessment_attempts (id, user_id, role, status, ability, section_abilities, question_count) VALUES ($1, $2, $3, 'IN_PROGRESS', 0, $4::jsonb, 0)`,
+    [id, userId, role, JSON.stringify(DEFAULT_SECTION_ABILITIES)],
   );
   return getState(userId, id);
 }
@@ -112,13 +132,15 @@ export async function startAttempt(userId: string, role: string | null): Promise
 export async function getState(userId: string, attemptId: string): Promise<AssessmentState> {
   await ensureSchema();
   const attempt = await pgPool.query(
-    `SELECT id, status, role, ability, question_count FROM assessment_attempts WHERE id = $1 AND user_id = $2`,
+    `SELECT id, status, role, ability, section_abilities, question_count FROM assessment_attempts WHERE id = $1 AND user_id = $2`,
     [attemptId, userId],
   );
   if (!attempt.rows[0]) throw new Error("Assessment attempt not found");
-  const answered = await pgPool.query(`SELECT question_id FROM assessment_responses WHERE attempt_id = $1`, [attemptId]);
+  const answered = await pgPool.query(`SELECT question_id, q.section FROM assessment_responses r JOIN assessment_questions q ON q.id = r.question_id WHERE r.attempt_id = $1`, [attemptId]);
   const answeredIds = new Set<string>(answered.rows.map((r) => r.question_id));
+  const sectionCounts = Object.fromEntries(SECTIONS.map((section) => [section, answered.rows.filter((r) => r.section === section).length])) as Record<AssessmentSection, number>;
   const count = Number(attempt.rows[0].question_count);
+  const sectionAbilities = normalizeSectionAbilities(attempt.rows[0].section_abilities);
   const questions = await pgPool.query(`SELECT id, section, prompt, options, difficulty, discrimination FROM assessment_questions WHERE active = true`);
   const mapped: AssessmentQuestion[] = questions.rows.map((r) => ({
     id: r.id,
@@ -128,14 +150,15 @@ export async function getState(userId: string, attemptId: string): Promise<Asses
     difficulty: Number(r.difficulty),
     discrimination: Number(r.discrimination),
   }));
-  const currentQuestion = attempt.rows[0].status === "IN_PROGRESS" && count < 8
-    ? chooseQuestion(mapped, answeredIds, Number(attempt.rows[0].ability))
+  const currentQuestion = attempt.rows[0].status === "IN_PROGRESS" && count < MAX_QUESTIONS
+    ? chooseAdaptiveQuestion(mapped, answeredIds, Number(attempt.rows[0].ability), sectionAbilities, sectionCounts)
     : null;
   return {
     id: attempt.rows[0].id,
     status: attempt.rows[0].status,
     role: attempt.rows[0].role,
     ability: Number(attempt.rows[0].ability),
+    sectionAbilities,
     answered: answeredIds.size,
     questionCount: count,
     currentQuestion,
@@ -150,9 +173,9 @@ export async function recordAnswer(userId: string, attemptId: string, questionId
   const client = await pgPool.connect();
   try {
     await client.query("BEGIN");
-    const a = await client.query(`SELECT id, ability, question_count, status FROM assessment_attempts WHERE id = $1 AND user_id = $2 FOR UPDATE`, [attemptId, userId]);
+    const a = await client.query(`SELECT id, ability, section_abilities, question_count, status FROM assessment_attempts WHERE id = $1 AND user_id = $2 FOR UPDATE`, [attemptId, userId]);
     if (!a.rows[0] || a.rows[0].status !== "IN_PROGRESS") throw new Error("Assessment is not active");
-    if (Number(a.rows[0].question_count) >= 8) throw new Error("Assessment already has the maximum number of answers");
+    if (Number(a.rows[0].question_count) >= MAX_QUESTIONS) throw new Error("Assessment already has the maximum number of answers");
     const q = await client.query(`SELECT id, section, prompt, options, correct_index, difficulty, discrimination, explanation FROM assessment_questions WHERE id = $1 AND active = true`, [questionId]);
     if (!q.rows[0]) throw new Error("Question not found");
     const options = Array.isArray(q.rows[0].options) ? q.rows[0].options : [];
@@ -169,10 +192,13 @@ export async function recordAnswer(userId: string, attemptId: string, questionId
     };
     const correct = Number(answerIndex) === Number(q.rows[0].correct_index);
     const abilityAfter = updateAbility(Number(a.rows[0].ability), question, correct);
+    const sectionAbilities = normalizeSectionAbilities(a.rows[0].section_abilities);
+    const sectionAfter = updateAbility(sectionAbilities[question.section], question, correct);
+    sectionAbilities[question.section] = sectionAfter;
     await client.query(`INSERT INTO assessment_responses (id, attempt_id, question_id, answer_index, is_correct, response_ms, ability_after) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [randomUUID(), attemptId, questionId, answerIndex, correct, responseMs, abilityAfter]);
-    await client.query(`UPDATE assessment_attempts SET ability = $2, question_count = question_count + 1 WHERE id = $1`, [attemptId, abilityAfter]);
+    await client.query(`UPDATE assessment_attempts SET ability = $2, section_abilities = $3::jsonb, question_count = question_count + 1 WHERE id = $1`, [attemptId, abilityAfter, JSON.stringify(sectionAbilities)]);
     await client.query("COMMIT");
-    return { correct, ability: abilityAfter, explanation: q.rows[0].explanation };
+    return { correct, ability: abilityAfter, sectionAbility: sectionAfter, explanation: q.rows[0].explanation };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -191,21 +217,21 @@ export async function completeAttempt(userId: string, attemptId: string): Promis
   const attempt = await pgPool.query(`SELECT id, role, ability, status, question_count FROM assessment_attempts WHERE id = $1 AND user_id = $2`, [attemptId, userId]);
   if (!attempt.rows[0]) throw new Error("Assessment attempt not found");
   if (attempt.rows[0].status === "COMPLETED") return getResult(userId, attemptId);
-  if (Number(attempt.rows[0].question_count) < 8) throw new Error("Assessment must contain 8 answered questions before completion");
+  if (Number(attempt.rows[0].question_count) < MAX_QUESTIONS) throw new Error(`Assessment must contain ${MAX_QUESTIONS} answered questions before completion`);
 
   const responses = await pgPool.query(
     `SELECT r.is_correct, r.response_ms, r.ability_after, q.section FROM assessment_responses r JOIN assessment_questions q ON q.id = r.question_id WHERE r.attempt_id = $1 ORDER BY r.created_at`,
     [attemptId],
   );
   const rows = responses.rows as Array<{ is_correct: boolean; response_ms: number | null; ability_after: number; section: AssessmentSection }>;
-  if (rows.length !== 8) throw new Error("Assessment response count is inconsistent");
+  if (rows.length !== MAX_QUESTIONS) throw new Error("Assessment response count is inconsistent");
   const accuracy = Math.round((rows.filter((r) => r.is_correct).length / rows.length) * 100);
   const timed = rows.filter((r) => r.response_ms !== null);
   const avgMs = timed.length ? timed.reduce((sum, r) => sum + Number(r.response_ms), 0) / timed.length : 45_000;
   const speedScore = Math.round(Math.max(0, Math.min(100, 100 - Math.max(0, avgMs - 45_000) / 150)));
   const overallScore = Math.round(abilityToScore(Number(attempt.rows[0].ability)) * 0.7 + accuracy * 0.2 + speedScore * 0.1);
   const sectionScores: Record<string, number> = {};
-  for (const section of ["quantitative", "logical", "verbal", "domain", "coding"]) {
+  for (const section of SECTIONS) {
     const sr = rows.filter((r) => r.section === section);
     if (sr.length) sectionScores[section] = Math.round((sr.filter((r) => r.is_correct).length / sr.length) * 100);
   }
