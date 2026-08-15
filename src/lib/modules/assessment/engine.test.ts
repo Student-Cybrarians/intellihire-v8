@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { abilityToScore, chooseQuestion, probabilityCorrect, updateAbility } from "./engine";
-import type { AssessmentQuestion } from "./types";
+import { abilityToScore, chooseAdaptiveQuestion, chooseQuestion, probabilityCorrect, updateAbility, weakestSection } from "./engine";
+import type { AssessmentQuestion, AssessmentSection } from "./types";
 
 const question: AssessmentQuestion = {
   id: "q1",
@@ -9,6 +9,14 @@ const question: AssessmentQuestion = {
   options: ["O(1)", "O(n)"],
   difficulty: 0,
   discrimination: 1,
+};
+
+const sectionAbilities: Record<AssessmentSection, number> = {
+  quantitative: 0.4,
+  logical: 0.2,
+  verbal: 0.1,
+  domain: -0.8,
+  coding: 0.6,
 };
 
 describe("adaptive assessment engine", () => {
@@ -37,5 +45,20 @@ describe("adaptive assessment engine", () => {
       { ...question, id: "q3", difficulty: -1 },
     ];
     expect(chooseQuestion(questions, new Set(["q1"]), 1.2)?.id).toBe("q2");
+  });
+
+  it("covers an unseen section before drilling into the weakest section", () => {
+    const counts = { quantitative: 1, logical: 1, verbal: 1, domain: 1, coding: 0 } as Record<AssessmentSection, number>;
+    expect(weakestSection(sectionAbilities, counts)).toBe("coding");
+  });
+
+  it("targets the weakest persisted section at a calibrated difficulty", () => {
+    const questions = [
+      { ...question, id: "coding-hard", difficulty: 0.7 },
+      { ...question, id: "coding-easy", difficulty: -0.5 },
+      { ...question, id: "domain-mid", section: "domain" as const, difficulty: -0.7 },
+    ];
+    const counts = { quantitative: 1, logical: 1, verbal: 1, domain: 2, coding: 2 } as Record<AssessmentSection, number>;
+    expect(chooseAdaptiveQuestion(questions, new Set(), 0, sectionAbilities, counts)?.id).toBe("domain-mid");
   });
 });
