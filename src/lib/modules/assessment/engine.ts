@@ -1,6 +1,7 @@
-import type { AssessmentQuestion } from "./types";
+import type { AssessmentQuestion, AssessmentSection } from "./types";
 
 const GUESSING = 0.25;
+const SECTIONS: AssessmentSection[] = ["quantitative", "logical", "verbal", "domain", "coding"];
 
 /** 3PL-style probability of a correct response. */
 export function probabilityCorrect(theta: number, question: AssessmentQuestion): number {
@@ -27,6 +28,39 @@ export function nextDifficulty(theta: number): number {
   return Math.max(-2.5, Math.min(2.5, theta));
 }
 
+export function weakestSection(
+  sectionAbilities: Record<AssessmentSection, number>,
+  sectionCounts: Record<AssessmentSection, number>,
+): AssessmentSection {
+  const uncovered = SECTIONS.filter((section) => sectionCounts[section] === 0);
+  if (uncovered.length) return uncovered[0];
+  return SECTIONS.reduce((weakest, section) =>
+    sectionAbilities[section] < sectionAbilities[weakest] ? section : weakest,
+  );
+}
+
+/** Selects a question for the weakest evidenced section, while covering every section before drilling down. */
+export function chooseAdaptiveQuestion<T extends AssessmentQuestion>(
+  questions: T[],
+  answeredIds: Set<string>,
+  theta: number,
+  sectionAbilities: Record<AssessmentSection, number>,
+  sectionCounts: Record<AssessmentSection, number>,
+): T | null {
+  const candidates = questions.filter((q) => !answeredIds.has(q.id));
+  if (!candidates.length) return null;
+  const targetSection = weakestSection(sectionAbilities, sectionCounts);
+  const sectionCandidates = candidates.filter((q) => q.section === targetSection);
+  const pool = sectionCandidates.length ? sectionCandidates : candidates;
+  const target = nextDifficulty(sectionAbilities[targetSection] ?? theta);
+  return pool.reduce((best, current) => {
+    const currentDistance = Math.abs(current.difficulty - target);
+    const bestDistance = Math.abs(best.difficulty - target);
+    return currentDistance < bestDistance ? current : best;
+  });
+}
+
+/** Backward-compatible selector used by unit consumers that do not have section state yet. */
 export function chooseQuestion<T extends AssessmentQuestion>(
   questions: T[],
   answeredIds: Set<string>,
