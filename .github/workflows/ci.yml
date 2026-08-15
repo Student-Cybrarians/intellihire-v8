@@ -40,6 +40,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Migrate test database
+        run: npm run db:migrate
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
       - name: Test
         run: npm test
         env:
