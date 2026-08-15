@@ -19,6 +19,7 @@ export type AssessmentState = {
   status: "IN_PROGRESS" | "COMPLETED" | "ABANDONED";
   role: string | null;
   ability: number;
+  sectionAbilities: Record<AssessmentSection, number>;
   answered: number;
   questionCount: number;
   currentQuestion: AssessmentQuestion | null;
