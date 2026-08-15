@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentAuth } from "@/lib/auth/current";
+import { recordAuditLog } from "@/db/repositories/sessions";
 import { fingerprintCareerTwinInput, buildCareerTwin } from "@/lib/career-twin/engine";
 import { getLatestCareerTwin, saveCareerTwin } from "@/db/repositories/careerTwin";
 
@@ -58,6 +59,14 @@ export async function POST(request: Request) {
       fingerprint,
       twin: generated.twin,
       mode: generated.mode,
+    });
+
+    await recordAuditLog({
+      actorUserId: auth.user.id,
+      action: "career_twin.generated",
+      resourceType: "career_twin_profile",
+      resourceId: twin.id,
+      metadata: { mode: generated.mode, sourceFingerprint: fingerprint },
     });
 
     return json({
